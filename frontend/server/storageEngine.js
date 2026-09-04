@@ -123,20 +123,24 @@ const server = http.createServer(async (req, res) => {
     const totalBytesOffloaded = mockLocalFiles.filter(f => f.stubbed).reduce((acc, f) => acc + f.size, 0);
     const totalLocalJunkBytes = mockLocalFiles.filter(f => !f.stubbed).reduce((acc, f) => acc + f.size, 0);
     
-    // PHASE 1: Query native Rust supervisor instead of fragile shell commands
+    // Fetch real system disk space
     let dynamicFree = '0.00';
+    try {
+      const realFree = await getRealSystemFreeGB();
+      dynamicFree = realFree.toFixed(2);
+    } catch (err) {
+      console.warn('Disk check failed:', err.message);
+    }
+
+    // Fetch Rust supervisor memory/cpu metrics
     let rustMetrics = null;
     try {
       const resp = await fetch('http://127.0.0.1:4000/metrics');
       if (resp.ok) {
         rustMetrics = await resp.json();
-        // Calculate free GB from native memory as well, or disk later. For now, use free RAM as a placeholder metric to prove it works
-        dynamicFree = (rustMetrics.free_memory / 1e9).toFixed(2); 
       }
     } catch (err) {
       console.warn('Rust supervisor not available:', err.message);
-      const realFree = await getRealSystemFreeGB();
-      dynamicFree = realFree.toFixed(2);
     }
 
     res.writeHead(200, { 'Content-Type': 'application/json' });

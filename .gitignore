@@ -1,0 +1,5 @@
+node_modules/
+VaultData/
+supervisor/target/
+supervisor/vault_state.db
+.DS_Store

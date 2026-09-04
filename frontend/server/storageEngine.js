@@ -185,6 +185,48 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (url.pathname === '/api/cloud-stub' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', async () => {
+      try {
+        const resp = await fetch('http://127.0.0.1:4000/cloud/stub', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body
+        });
+        const data = await resp.json();
+        res.writeHead(resp.status, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(data));
+      } catch (err) {
+        res.writeHead(503);
+        res.end(JSON.stringify({ error: 'Rust supervisor is unavailable' }));
+      }
+    });
+    return;
+  }
+
+  if (url.pathname === '/api/cloud-restore' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', async () => {
+      try {
+        const resp = await fetch('http://127.0.0.1:4000/cloud/restore', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body
+        });
+        const data = await resp.json();
+        res.writeHead(resp.status, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(data));
+      } catch (err) {
+        res.writeHead(503);
+        res.end(JSON.stringify({ error: 'Rust supervisor is unavailable' }));
+      }
+    });
+    return;
+  }
+
   if (url.pathname === '/api/duplicates' && req.method === 'GET') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(duplicateApps));
@@ -305,17 +347,35 @@ const server = http.createServer(async (req, res) => {
   if (url.pathname === '/api/offload' && req.method === 'POST') {
     let body = '';
     req.on('data', chunk => body += chunk);
-    req.on('end', () => {
+    req.on('end', async () => {
       try {
         const { fileIds, targetVault } = JSON.parse(body);
-        fileIds.forEach(id => {
+        for (const id of fileIds) {
           const file = mockLocalFiles.find(f => f.id === id);
           if (file) {
-            file.stubbed = true;
-            file.targetVault = targetVault || 'Remote Vault';
-            addLog('SUCCESS', `Offloaded & Stubbed: ${file.name} (${(file.size / 1e9).toFixed(2)} GB) -> ${file.targetVault}`);
+            let realPath = file.path;
+            if (realPath.startsWith('~/')) {
+              realPath = path.join(os.homedir(), realPath.slice(2));
+            }
+            try {
+              const resp = await fetch('http://127.0.0.1:4000/cloud/stub', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ file_path: realPath })
+              });
+              if (resp.ok) {
+                file.stubbed = true;
+                file.targetVault = targetVault || 'Remote Vault';
+                addLog('SUCCESS', `Offloaded & Stubbed: ${file.name} (${(file.size / 1e9).toFixed(2)} GB) -> ${file.targetVault}`);
+              } else {
+                const errData = await resp.text();
+                addLog('ERROR', `Failed to stub ${file.name}: ${errData}`);
+              }
+            } catch (err) {
+              addLog('ERROR', `Rust daemon error for ${file.name}: ${err.message}`);
+            }
           }
-        });
+        }
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ success: true, mockLocalFiles }));
       } catch (err) {
@@ -329,14 +389,32 @@ const server = http.createServer(async (req, res) => {
   if (url.pathname === '/api/hydrate' && req.method === 'POST') {
     let body = '';
     req.on('data', chunk => body += chunk);
-    req.on('end', () => {
+    req.on('end', async () => {
       try {
         const { fileId } = JSON.parse(body);
         const file = mockLocalFiles.find(f => f.id === fileId);
         if (file) {
-          file.stubbed = false;
-          file.targetVault = null;
-          addLog('SUCCESS', `Re-hydrated back to Mac local storage: ${file.name} (${(file.size / 1e9).toFixed(2)} GB)`);
+          let realPath = file.path;
+          if (realPath.startsWith('~/')) {
+            realPath = path.join(os.homedir(), realPath.slice(2));
+          }
+          try {
+            const resp = await fetch('http://127.0.0.1:4000/cloud/restore', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ file_path: realPath })
+            });
+            if (resp.ok) {
+              file.stubbed = false;
+              file.targetVault = null;
+              addLog('SUCCESS', `Re-hydrated back to Mac local storage: ${file.name} (${(file.size / 1e9).toFixed(2)} GB)`);
+            } else {
+              const errData = await resp.text();
+              addLog('ERROR', `Failed to restore ${file.name}: ${errData}`);
+            }
+          } catch (err) {
+             addLog('ERROR', `Rust daemon error for ${file.name}: ${err.message}`);
+          }
         }
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ success: true, file }));

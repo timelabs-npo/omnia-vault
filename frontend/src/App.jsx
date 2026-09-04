@@ -14,7 +14,7 @@ import SettingsModal from './components/SettingsModal';
 import Toast from './components/Toast';
 import SystemPropagatorView from './components/SystemPropagatorView';
 import CloudSyncMonitorView from './components/CloudSyncMonitorView';
-import CloudCommanderView from './components/CloudCommanderView';
+
 
 const API_BASE = 'http://localhost:3001/api';
 

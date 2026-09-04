@@ -223,7 +223,7 @@ async fn cloud_stub_handler(
     let hash = hash_bytes.iter().map(|b| format!("{:02x}", b)).collect::<String>();
     let vault_file_path = format!("{}/{}", vault_dir, hash);
     
-    if let Err(e) = fs::rename(&payload.file_path, &vault_file_path) {
+    if let Err(_e) = fs::rename(&payload.file_path, &vault_file_path) {
         if let Err(copy_err) = fs::copy(&payload.file_path, &vault_file_path) {
              return Json(StubResponse { status: "error".into(), message: format!("Move failed: {}", copy_err), vault_path: None });
         }

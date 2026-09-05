@@ -1,0 +1,165 @@
+ation ID is already bound to a different request digest"),
++            Self::ItemNotFound => f.write_str("item not found in pinned revision"),
++            Self::RevisionNotFound => f.write_str("revision not found"),
++            Self::Busy(s) => write!(f, "database busy/locked: {s}"),
++            Self::Corrupt(s) => write!(f, "integrity failure: {s}"),
++            Self::Invariant(s) => write!(f, "internal invariant failure: {s}"),
++            Self::Storage(s) => write!(f, "storage error: {s}"),
++            Self::OutcomeUnknown(s) => write!(f, "outcome unknown; reconcile with same operation ID: {s}"),
++        }
++    }
++}
++
++impl std::error::Error for StoreError {}
++
++impl From<rusqlite::Error> for StoreError {
++    fn from(value: rusqlite::Error) -> Self {
++        match &value {
++            rusqlite::Error::SqliteFailure(code, message) => {
++                let detail = message.clone().unwrap_or_else(|| value.to_string());
++                match code.code {
++                    ErrorCode::DatabaseBusy | ErrorCode::DatabaseLocked => Self::Busy(detail),
++                    ErrorCode::DatabaseCorrupt | ErrorCode::NotADatabase => Self::Corrupt(detail),
++                    _ => Self::Storage(detail),
++                }
++            }
++            _ => Self::Storage(value.to_string()),
++        }
++    }
++}
++
++#[derive(Debug, Clone)]
++struct RevisionRecord {
++    revision_id: RevisionId,
++    workspace_id: WorkspaceId,
++    replica_id: ReplicaId,
++    actor_id: ActorId,
++    operation_id: OperationId,
++    generation: u64,
++    parent_revision_id: Option<RevisionId>,
++    tree_id: TreeId,
++    canonical: Vec<u8>,
++}
++
++pub struct StateStore {
++    path: PathBuf,
++    conn: Connection,
++    ctx: HostContext,
++    write_blocked: bool,
++}
++
++impl StateStore {
++    pub fn open(path: impl AsRef<Path>, ctx: HostContext) -> Result<Self, StoreError> {
++        let path = path.as_ref().to_path_buf();
++        let mut conn = Connection::open(&path)?;
++        // Gate the linked SQLite engine before any schema/data write. Then reject a
++        // foreign/unauthorized existing store before applying mutating durability PRAGMAs.
++        ensure_supported_sqlite(&conn)?;
++        ensure_schema(&mut conn)?;
++        if identity_present(&conn)? {
++            verify_identity(&conn, ctx)?;
++        }
++        configure_connection(&conn)?;
++        Ok(Self { path, conn, ctx, write_blocked: false })
++    }
++
++    pub fn path(&self) -> &Path { &self.path }
++
++    pub fn context(&self) -> HostContext { self.ctx }
++
++    pub fn engine_info(&self) -> Result<EngineInfo, StoreError> {
++        let sqlite_version: String = self.conn.query_row("SELECT sqlite_version()", [], |r| r.get(0))?;
++        let sqlite_source_id: String = self.conn.query_row("SELECT sqlite_source_id()", [], |r| r.get(0))?;
++        let vfs_name = diagnostic_vfs_name(&self.conn);
++        let journal_mode: String = self.conn.query_row("PRAGMA journal_mode", [], |r| r.get(0))?;
++        let synchronous: i64 = self.conn.query_row("PRAGMA synchronous", [], |r| r.get(0))?;
++        let foreign_keys: i64 = self.conn.query_row("PRAGMA foreign_keys", [], |r| r.get(0))?;
++        #[cfg(target_os = "macos")]
++        let fullfsync = Some(self.conn.query_row("PRAGMA fullfsync", [], |r| r.get(0))?);
++        #[cfg(not(target_os = "macos"))]
++        let fullfsync = None;
++        let mut stmt = self.conn.prepare("PRAGMA compile_options")?;
++        let compile_options = stmt.query_map([], |r| r.get::<_, String>(0))?.collect::<Result<Vec<_>, _>>()?;
++        Ok(EngineInfo { sqlite_version, sqlite_source_id, vfs_name, compile_options, journal_mode, synchronous, foreign_keys, fullfsync, busy_timeout_ms: BUSY_TIMEOUT_MS })
++    }
++
++    pub fn init_workspace(&mut self, request: InitWorkspaceV1) -> Result<BootstrapReceipt, StoreError> {
++        if request.schema_version != SCHEMA_VERSION { return Err(StoreError::UnsupportedSchema(request.schema_version)); }
++        if self.write_blocked { return Err(StoreError::OutcomeUnknown("connection is blocked after an uncertain write; reopen and reconcile".into())); }
++        let request_digest = init_request_digest(self.ctx, request.operation_id);
++
++        if identity_present(&self.conn)? {
++            verify_identity(&self.conn, self.ctx)?;
++            if let Some(existing) = load_bootstrap_receipt(&self.conn, self.ctx, request.operation_id)? {
++                if existing.request_digest != request_digest { return Err(StoreError::OperationIdReuse); }
++                return Ok(existing);
++            }
++            return Err(StoreError::AlreadyInitialized);
++        }
++
++        let tx = self.conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
++        if identity_present(&tx)? {
++            verify_identity(&tx, self.ctx)?;
++            if let Some(existing) = load_bootstrap_receipt(&tx, self.ctx, request.operation_id)? {
++                if existing.request_digest != request_digest { return Err(StoreError::OperationIdReuse); }
++                tx.commit()?;
++                return Ok(existing);
++            }
++            return Err(StoreError::AlreadyInitialized);
++        }
++
++        set_identity(&tx, self.ctx)?;
++        let entries = BTreeMap::new();
++        let (empty_tree_id, empty_tree_bytes) = tree_id(&entries);
++        insert_or_verify_tree(&tx, empty_tree_id, &empty_tree_bytes, &entries)?;
++
++        let (genesis_revision_id, genesis_bytes) = revision_id(self.ctx.workspace_id,self.ctx.replica_id,self.ctx.actor_id,request.operation_id,0,None,empty_tree_id).map_err(|e| StoreError::Invariant(e.into()))?;
++        insert_or_verify_revision(&tx, RevisionRecord { revision_id: genesis_revision_id, workspace_id:self.ctx.workspace_id, replica_id:self.ctx.replica_id, actor_id:self.ctx.actor_id, operation_id:request.operation_id, generation:0, parent_revision_id:None, tree_id:empty_tree_id, canonical:genesis_bytes })?;
++        tx.execute("INSERT INTO heads(workspace_id,replica_id,revision_id,generation) VALUES(?1,?2,?3,0)",params![self.ctx.workspace_id.as_bytes().as_slice(),self.ctx.replica_id.as_bytes().as_slice(),genesis_revision_id.as_bytes().as_slice()])?;
++        let receipt = finalize_bootstrap_receipt(BootstrapReceipt { owner_id:self.ctx.owner_id, actor_id:self.ctx.actor_id, workspace_id:self.ctx.workspace_id, replica_id:self.ctx.replica_id, operation_id:request.operation_id, request_digest, genesis_head:Head{revision_id:genesis_revision_id,generation:0}, empty_tree_id, canonical_bytes:Vec::new(), receipt_digest:ReceiptDigest([0;32]) });
++        insert_bootstrap_receipt(&tx,&receipt)?;
++        if let Err(e)=tx.commit(){ self.write_blocked=true; return Err(StoreError::OutcomeUnknown(e.to_string())); }
++        Ok(receipt)
++    }
++
++    pub fn publish_item_bytes(&mut self, request: PublishItemBytesV1) -> Result<PublishReceipt, StoreError> {
++        if request.schema_version != SCHEMA_VERSION { return Err(StoreError::UnsupportedSchema(request.schema_version)); }
++        if request.bytes.len() > MAX_INPUT_BYTES { return Err(StoreError::InputTooLarge{actual:request.bytes.len(),max:MAX_INPUT_BYTES}); }
++        if request.expected_head.generation >= MAX_GENERATION { return Err(StoreError::GenerationOverflow); }
++        if self.write_blocked { return Err(StoreError::OutcomeUnknown("connection is blocked after an uncertain write; reopen and reconcile".into())); }
++        verify_identity(&self.conn,self.ctx)?;
++
++        let captured=capture_file(&request.bytes);
++        if captured.file_manifest_id != request.claimed_file_manifest_id { return Err(StoreError::ManifestMismatch{claimed:request.claimed_file_manifest_id,actual:captured.file_manifest_id}); }
++        let request_digest=publish_request_digest(self.ctx,request.operation_id,request.expected_head,request.item_id,captured.file_manifest_id);
++        test_failpoint("before_begin");
++        let tx=self.conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
++        verify_identity(&tx,self.ctx)?;
++        if let Some(existing)=load_publish_receipt(&tx,self.ctx,request.operation_id)? { if existing.request_digest != request_digest { return Err(StoreError::OperationIdReuse); } tx.commit()?; return Ok(existing); }
++        if load_bootstrap_receipt(&tx,self.ctx,request.operation_id)?.is_some(){ return Err(StoreError::OperationIdReuse); }
++        let receipt_count=count_publish_receipts(&tx,self.ctx)?; if receipt_count>=MAX_TERMINAL_RECEIPTS{return Err(StoreError::LedgerFull);}
++        let current=load_head(&tx,self.ctx)?;
++        let current_revision=validate_revision_closure(&tx,self.ctx,current.revision_id)?;
++        if current_revision.generation != current.generation { return Err(StoreError::Corrupt("head generation disagrees with referenced revision".into())); }
++        if current != request.expected_head {
++            let receipt=finalize_publish_receipt(PublishReceipt{kind:PublishReceiptKind::Conflict,owner_id:self.ctx.owner_id,actor_id:self.ctx.actor_id,workspace_id:self.ctx.workspace_id,replica_id:self.ctx.replica_id,operation_id:request.operation_id,request_digest,expected_head:request.expected_head,result_head:current,item_id:request.item_id,file_manifest_id:captured.file_manifest_id,canonical_bytes:Vec::new(),receipt_digest:ReceiptDigest([0;32])});
++            insert_publish_receipt(&tx,&receipt)?; test_failpoint("after_receipt_insert"); test_failpoint("before_commit");
++            if let Err(e)=tx.commit(){self.write_blocked=true;return Err(StoreError::OutcomeUnknown(e.to_string()));}
++            test_failpoint("after_commit_before_response"); return Ok(receipt);
++        }
++        enforce_unique_chunk_limit(&tx,&captured)?;
++        insert_or_verify_captured_file(&tx,&captured)?;
++        let base_revision=current_revision;
++        let mut entries=load_and_verify_tree(&tx,base_revision.tree_id,true)?;
++        if !entries.contains_key(&request.item_id)&&entries.len()>=MAX_ITEMS_PER_ROOT{return Err(StoreError::ItemLimit);}
++        entries.insert(request.item_id,captured.file_manifest_id);
++        let (new_tree_id,new_tree_bytes)=tree_id(&entries);
++        insert_or_verify_tree(&tx,new_tree_id,&new_tree_bytes,&entries)?;
++        let new_generation=current.generation.checked_add(1).ok_or(StoreError::GenerationOverflow)?;
++        if new_generation>MAX_GENERATION{return Err(StoreError::GenerationOverflow);}
++        let (new_revision_id,new_revision_bytes)=revision_id(self.ctx.workspace_id,self.ctx.replica_id,self.ctx.actor_id,request.operation_id,new_generation,Some(current.revision_id),new_tree_id).map_err(|e|StoreError::Invariant(e.into()))?;
++        insert_or_verify_revision(&tx,RevisionRecord{revision_id:new_revision_id,workspace_id:self.ctx.workspace_id,replica_id:self.ctx.replica_id,actor_id:self.ctx.actor_id,operation_id:request.operation_id,generation:new_generation,parent_revision_id:Some(current.revision_id),tree_id:new_tree_id,canonical:new_revision_bytes})?;
++        test_failpoint("after_manifest_revision_insert");
++        validate_revision_closure(&tx,self.ctx,new_revision_id)?;
++        let changed=tx.execute("UPDATE heads SET revision_id=?1,generation=?2 WHERE workspace_id=?3 AND replica_id=?4 AND revision_id=?5 AND generation=?6",params![new_revision_id.as_bytes().as_slice(),to_i64(new_generation)?,self.ctx.workspace_id.as_bytes().as_slice(),self.ctx.replica_id.as_bytes().as_slice(),current.revision_id.as_bytes().as_slice(),to_i64(current.generation)?])?;
++        if changed != 1 { return Err(StoreError::Invariant(format!("conditional head u

@@ -1,0 +1,1 @@
+The exact r2 patch is being published as numbered UTF-8 parts. Concatenate in lexical order and verify SHA-256 `594bab835d3f0a909efd70a312992ca5a3a666025309a5128e20cabc57697c47` and byte length `84637` before applying to frozen baseline `f5995536fede02d403f0525ff9093996457efecb`.

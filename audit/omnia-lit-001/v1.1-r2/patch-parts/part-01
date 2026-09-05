@@ -1,0 +1,327 @@
+u8>, &'static str> {
++    if generation == 0 && parent.is_some() { return Err("genesis cannot have a parent"); }
++    if generation != 0 && parent.is_none() { return Err("non-genesis revision requires one parent"); }
++    let mut out = Vec::with_capacity(160);
++    out.extend_from_slice(TAG_REV);
++    out.extend_from_slice(workspace_id.as_bytes());
++    out.extend_from_slice(replica_id.as_bytes());
++    out.extend_from_slice(actor_id.as_bytes());
++    out.extend_from_slice(operation_id.as_bytes());
++    put_u64(&mut out, generation);
++    match parent {
++        None => put_u8(&mut out, 0),
++        Some(parent_id) => {
++            put_u8(&mut out, 1);
++            out.extend_from_slice(parent_id.as_bytes());
++        }
++    }
++    out.extend_from_slice(tree_id.as_bytes());
++    Ok(out)
++}
++
++pub fn revision_id(
++    workspace_id: WorkspaceId,
++    replica_id: ReplicaId,
++    actor_id: ActorId,
++    operation_id: OperationId,
++    generation: u64,
++    parent: Option<RevisionId>,
++    tree_id: TreeId,
++) -> Result<(RevisionId, Vec<u8>), &'static str> {
++    let bytes = revision_bytes(workspace_id, replica_id, actor_id, operation_id, generation, parent, tree_id)?;
++    Ok((RevisionId(sha256(&bytes)), bytes))
++}
++
++pub fn publish_request_digest(
++    ctx: HostContext,
++    operation_id: OperationId,
++    expected_head: Head,
++    item_id: ItemId,
++    file_manifest_id: FileManifestId,
++) -> RequestDigest {
++    let mut out = Vec::with_capacity(192);
++    out.extend_from_slice(TAG_PUBLISH);
++    out.extend_from_slice(ctx.actor_id.as_bytes());
++    out.extend_from_slice(ctx.workspace_id.as_bytes());
++    out.extend_from_slice(ctx.replica_id.as_bytes());
++    out.extend_from_slice(operation_id.as_bytes());
++    out.extend_from_slice(expected_head.revision_id.as_bytes());
++    put_u64(&mut out, expected_head.generation);
++    out.extend_from_slice(item_id.as_bytes());
++    out.extend_from_slice(file_manifest_id.as_bytes());
++    RequestDigest(sha256(&out))
++}
++
++pub fn init_request_digest(ctx: HostContext, operation_id: OperationId) -> RequestDigest {
++    let mut out = Vec::with_capacity(128);
++    out.extend_from_slice(TAG_INIT);
++    out.extend_from_slice(ctx.owner_id.as_bytes());
++    out.extend_from_slice(ctx.actor_id.as_bytes());
++    out.extend_from_slice(ctx.workspace_id.as_bytes());
++    out.extend_from_slice(ctx.replica_id.as_bytes());
++    out.extend_from_slice(operation_id.as_bytes());
++    RequestDigest(sha256(&out))
++}
++
++pub fn publish_receipt_bytes(receipt: &PublishReceipt) -> Vec<u8> {
++    let mut out = Vec::with_capacity(320);
++    out.extend_from_slice(TAG_RECEIPT);
++    put_u8(&mut out, receipt.kind as u8);
++    out.extend_from_slice(receipt.owner_id.as_bytes());
++    out.extend_from_slice(receipt.actor_id.as_bytes());
++    out.extend_from_slice(receipt.workspace_id.as_bytes());
++    out.extend_from_slice(receipt.replica_id.as_bytes());
++    out.extend_from_slice(receipt.operation_id.as_bytes());
++    out.extend_from_slice(receipt.request_digest.as_bytes());
++    out.extend_from_slice(receipt.expected_head.revision_id.as_bytes());
++    put_u64(&mut out, receipt.expected_head.generation);
++    out.extend_from_slice(receipt.result_head.revision_id.as_bytes());
++    put_u64(&mut out, receipt.result_head.generation);
++    out.extend_from_slice(receipt.item_id.as_bytes());
++    out.extend_from_slice(receipt.file_manifest_id.as_bytes());
++    out
++}
++
++pub fn finalize_publish_receipt(mut receipt: PublishReceipt) -> PublishReceipt {
++    let canonical = publish_receipt_bytes(&receipt);
++    receipt.receipt_digest = ReceiptDigest(sha256(&canonical));
++    receipt.canonical_bytes = canonical;
++    receipt
++}
++
++pub fn bootstrap_receipt_bytes(receipt: &BootstrapReceipt) -> Vec<u8> {
++    let mut out = Vec::with_capacity(256);
++    out.extend_from_slice(TAG_INIT_RECEIPT);
++    out.extend_from_slice(receipt.owner_id.as_bytes());
++    out.extend_from_slice(receipt.actor_id.as_bytes());
++    out.extend_from_slice(receipt.workspace_id.as_bytes());
++    out.extend_from_slice(receipt.replica_id.as_bytes());
++    out.extend_from_slice(receipt.operation_id.as_bytes());
++    out.extend_from_slice(receipt.request_digest.as_bytes());
++    out.extend_from_slice(receipt.genesis_head.revision_id.as_bytes());
++    put_u64(&mut out, receipt.genesis_head.generation);
++    out.extend_from_slice(receipt.empty_tree_id.as_bytes());
++    out
++}
++
++pub fn finalize_bootstrap_receipt(mut receipt: BootstrapReceipt) -> BootstrapReceipt {
++    let canonical = bootstrap_receipt_bytes(&receipt);
++    receipt.receipt_digest = ReceiptDigest(sha256(&canonical));
++    receipt.canonical_bytes = canonical;
++    receipt
++}
+diff --git a/supervisor/src/intact_transition/mod.rs b/supervisor/src/intact_transition/mod.rs
+new file mode 100644
+index 0000000..57dce8c
+--- /dev/null
++++ b/supervisor/src/intact_transition/mod.rs
+@@ -0,0 +1,17 @@
++mod encoding;
++mod store;
++mod types;
++
++pub use encoding::{
++    bootstrap_receipt_bytes, capture_file,
++    finalize_bootstrap_receipt, finalize_publish_receipt, init_request_digest,
++    publish_receipt_bytes, publish_request_digest, revision_bytes, revision_id, sha256,
++    tree_bytes, tree_id, CapturedChunk, CapturedFile,
++};
++pub use store::{StateStore, StoreError};
++pub use types::*;
++
++/// Public convenience: calculate the v1 FileManifestId for an owned byte buffer.
++pub fn manifest_id_for_bytes(bytes: &[u8]) -> FileManifestId {
++    capture_file(bytes).file_manifest_id
++}
+diff --git a/supervisor/src/intact_transition/store.rs b/supervisor/src/intact_transition/store.rs
+new file mode 100644
+index 0000000..c509b37
+--- /dev/null
++++ b/supervisor/src/intact_transition/store.rs
+@@ -0,0 +1,1143 @@
++use std::collections::{BTreeMap, BTreeSet};
++use std::ffi::CStr;
++use std::fmt;
++use std::fs::OpenOptions;
++use std::io::{stderr, Write};
++use std::os::raw::{c_char, c_void};
++use std::path::{Path, PathBuf};
++use std::thread;
++use std::time::Duration;
++
++use rusqlite::{params, Connection, ErrorCode, OptionalExtension, Transaction, TransactionBehavior};
++
++use super::encoding::*;
++use super::types::*;
++
++const BUSY_TIMEOUT_MS: u64 = 5_000;
++
++fn test_failpoint(name: &str) {
++    if std::env::var("OMNIA_LIT_FAILPOINT").ok().as_deref() != Some(name) {
++        return;
++    }
++    if let Ok(path) = std::env::var("OMNIA_LIT_FAILPOINT_MARKER") {
++        if let Ok(mut f) = OpenOptions::new().create(true).write(true).truncate(true).open(path) {
++            let _ = writeln!(f, "{name}");
++            let _ = f.sync_all();
++        }
++    }
++    let _ = writeln!(stderr(), "OMNIA_LIT_FAILPOINT_REACHED:{name}");
++    let _ = stderr().flush();
++    loop { thread::sleep(Duration::from_secs(3600)); }
++}
++const SCHEMA_NAME: &[u8] = b"OMNIA-LIT-001";
++const SQL_SCHEMA: &str = r#"
++CREATE TABLE omnia_meta (
++    key TEXT PRIMARY KEY,
++    value BLOB NOT NULL
++) STRICT;
++
++CREATE TABLE chunks (
++    object_id BLOB PRIMARY KEY CHECK(length(object_id)=32),
++    bytes BLOB NOT NULL,
++    byte_len INTEGER NOT NULL CHECK(byte_len >= 0 AND byte_len <= 4194304 AND length(bytes)=byte_len)
++) STRICT;
++
++CREATE TABLE file_manifests (
++    file_manifest_id BLOB PRIMARY KEY CHECK(length(file_manifest_id)=32),
++    total_length INTEGER NOT NULL CHECK(total_length >= 0 AND total_length <= 33554432),
++    chunk_count INTEGER NOT NULL CHECK(chunk_count >= 0 AND chunk_count <= 8),
++    canonical BLOB NOT NULL
++) STRICT;
++
++CREATE TABLE file_chunks (
++    file_manifest_id BLOB NOT NULL CHECK(length(file_manifest_id)=32),
++    ordinal INTEGER NOT NULL CHECK(ordinal >= 0 AND ordinal < 8),
++    object_id BLOB NOT NULL CHECK(length(object_id)=32),
++    chunk_length INTEGER NOT NULL CHECK(chunk_length > 0 AND chunk_length <= 4194304),
++    PRIMARY KEY(file_manifest_id, ordinal),
++    FOREIGN KEY(file_manifest_id) REFERENCES file_manifests(file_manifest_id),
++    FOREIGN KEY(object_id) REFERENCES chunks(object_id)
++) STRICT;
++
++CREATE TABLE trees (
++    tree_id BLOB PRIMARY KEY CHECK(length(tree_id)=32),
++    item_count INTEGER NOT NULL CHECK(item_count >= 0 AND item_count <= 1024),
++    canonical BLOB NOT NULL
++) STRICT;
++
++CREATE TABLE tree_items (
++    tree_id BLOB NOT NULL CHECK(length(tree_id)=32),
++    item_id BLOB NOT NULL CHECK(length(item_id)=16),
++    file_manifest_id BLOB NOT NULL CHECK(length(file_manifest_id)=32),
++    PRIMARY KEY(tree_id, item_id),
++    FOREIGN KEY(tree_id) REFERENCES trees(tree_id),
++    FOREIGN KEY(file_manifest_id) REFERENCES file_manifests(file_manifest_id)
++) STRICT;
++
++CREATE TABLE revisions (
++    revision_id BLOB PRIMARY KEY CHECK(length(revision_id)=32),
++    workspace_id BLOB NOT NULL CHECK(length(workspace_id)=16),
++    replica_id BLOB NOT NULL CHECK(length(replica_id)=16),
++    actor_id BLOB NOT NULL CHECK(length(actor_id)=16),
++    operation_id BLOB NOT NULL CHECK(length(operation_id)=16),
++    generation INTEGER NOT NULL CHECK(generation >= 0),
++    parent_revision_id BLOB NULL CHECK(parent_revision_id IS NULL OR length(parent_revision_id)=32),
++    tree_id BLOB NOT NULL CHECK(length(tree_id)=32),
++    canonical BLOB NOT NULL,
++    FOREIGN KEY(parent_revision_id) REFERENCES revisions(revision_id),
++    FOREIGN KEY(tree_id) REFERENCES trees(tree_id),
++    UNIQUE(workspace_id, replica_id, generation),
++    UNIQUE(workspace_id, replica_id, operation_id),
++    UNIQUE(workspace_id, replica_id, generation, revision_id),
++    CHECK((generation=0 AND parent_revision_id IS NULL) OR (generation>0 AND parent_revision_id IS NOT NULL))
++) STRICT;
++
++CREATE TABLE heads (
++    workspace_id BLOB NOT NULL CHECK(length(workspace_id)=16),
++    replica_id BLOB NOT NULL CHECK(length(replica_id)=16),
++    revision_id BLOB NOT NULL CHECK(length(revision_id)=32),
++    generation INTEGER NOT NULL CHECK(generation >= 0),
++    PRIMARY KEY(workspace_id, replica_id),
++    FOREIGN KEY(revision_id) REFERENCES revisions(revision_id),
++    FOREIGN KEY(workspace_id, replica_id, generation, revision_id)
++        REFERENCES revisions(workspace_id, replica_id, generation, revision_id)
++) STRICT;
++
++CREATE TABLE receipts (
++    owner_id BLOB NOT NULL CHECK(length(owner_id)=16),
++    actor_id BLOB NOT NULL CHECK(length(actor_id)=16),
++    workspace_id BLOB NOT NULL CHECK(length(workspace_id)=16),
++    replica_id BLOB NOT NULL CHECK(length(replica_id)=16),
++    operation_id BLOB NOT NULL CHECK(length(operation_id)=16),
++    request_digest BLOB NOT NULL CHECK(length(request_digest)=32),
++    kind INTEGER NOT NULL CHECK(kind IN (1,2)),
++    expected_revision_id BLOB NOT NULL CHECK(length(expected_revision_id)=32),
++    expected_generation INTEGER NOT NULL CHECK(expected_generation >= 0),
++    result_revision_id BLOB NOT NULL CHECK(length(result_revision_id)=32),
++    result_generation INTEGER NOT NULL CHECK(result_generation >= 0),
++    item_id BLOB NOT NULL CHECK(length(item_id)=16),
++    file_manifest_id BLOB NOT NULL CHECK(length(file_manifest_id)=32),
++    canonical BLOB NOT NULL,
++    PRIMARY KEY(owner_id, workspace_id, replica_id, operation_id),
++    FOREIGN KEY(workspace_id, replica_id, result_generation, result_revision_id)
++        REFERENCES revisions(workspace_id, replica_id, generation, revision_id),
++    CHECK(kind != 1 OR result_generation = expected_generation + 1)
++) STRICT;
++
++CREATE UNIQUE INDEX one_success_per_generation
++ON receipts(workspace_id, replica_id, result_generation)
++WHERE kind=1;
++
++CREATE TABLE bootstrap_receipts (
++    owner_id BLOB NOT NULL CHECK(length(owner_id)=16),
++    actor_id BLOB NOT NULL CHECK(length(actor_id)=16),
++    workspace_id BLOB NOT NULL CHECK(length(workspace_id)=16),
++    replica_id BLOB NOT NULL CHECK(length(replica_id)=16),
++    operation_id BLOB NOT NULL CHECK(length(operation_id)=16),
++    request_digest BLOB NOT NULL CHECK(length(request_digest)=32),
++    genesis_revision_id BLOB NOT NULL CHECK(length(genesis_revision_id)=32),
++    empty_tree_id BLOB NOT NULL CHECK(length(empty_tree_id)=32),
++    canonical BLOB NOT NULL,
++    PRIMARY KEY(owner_id, workspace_id, replica_id, operation_id),
++    FOREIGN KEY(genesis_revision_id) REFERENCES revisions(revision_id),
++    FOREIGN KEY(empty_tree_id) REFERENCES trees(tree_id)
++) STRICT;
++
++PRAGMA user_version=1;
++"#;
++
++#[derive(Debug)]
++pub enum StoreError {
++    UnsupportedSchema(u8),
++    NamespaceMismatch(String),
++    NotInitialized,
++    AlreadyInitialized,
++    Unauthorized,
++    InputTooLarge { actual: usize, max: usize },
++    ItemLimit,
++    UniqueChunkLimit,
++    LedgerFull,
++    GenerationOverflow,
++    ManifestMismatch { claimed: FileManifestId, actual: FileManifestId },
++    OperationIdReuse,
++    ItemNotFound,
++    RevisionNotFound,
++    Busy(String),
++    Corrupt(String),
++    Invariant(String),
++    Storage(String),
++    OutcomeUnknown(String),
++}
++
++impl fmt::Display for StoreError {
++    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
++        match self {
++            Self::UnsupportedSchema(v) => write!(f, "unsupported schema version {v}"),
++            Self::NamespaceMismatch(s) => write!(f, "namespace/schema mismatch: {s}"),
++            Self::NotInitialized => f.write_str("store is not initialized"),
++            Self::AlreadyInitialized => f.write_str("store is already initialized with a different bootstrap request"),
++            Self::Unauthorized => f.write_str("host context does not own this store scope"),
++            Self::InputTooLarge { actual, max } => write!(f, "input too large: {actual} > {max}"),
++            Self::ItemLimit => f.write_str("root item limit reached"),
++            Self::UniqueChunkLimit => f.write_str("retained unique chunk payload limit reached"),
++            Self::LedgerFull => f.write_str("terminal operation receipt limit reached"),
++            Self::GenerationOverflow => f.write_str("generation cannot advance"),
++            Self::ManifestMismatch { claimed, actual } => write!(f, "claimed manifest {claimed} does not match captured bytes {actual}"),
++            Self::OperationIdReuse => f.write_str("oper

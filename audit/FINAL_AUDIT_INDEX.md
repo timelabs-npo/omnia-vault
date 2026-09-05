@@ -22,8 +22,7 @@ The material audit stages were committed independently rather than flattened int
 10. `506af7bd146f5ce94ad79943e8d3d1a52758ddb7` — r2 candidate repair/static evidence.
 11. `5ee45701eede1f36ffe7eec40d5163f72a58d19f` — exact reconstructible r2 patch publication.
 12. Later correction commits preserve the audit trail for transfer-integrity issues and restore byte-exact frozen oracle/golden-vector artifacts rather than rewriting history.
-
-Archive transport and final-index commits follow as separate publication steps.
+13. Archive, generated-artifact inventory and final publication-state commits are separate subsequent audit steps.
 
 ## Primary locations
 
@@ -33,6 +32,7 @@ Archive transport and final-index commits follow as separate publication steps.
 - r2 candidate/static evidence: `audit/omnia-lit-001/v1.1-r2/`
 - Unverified external review: `audit/external-review/`
 - Redundant 19-file audit archive: `audit/archive/audit-primary/`
+- Complete 52-file generated-artifact inventory: `audit/archive/all-generated-manifest.json`
 - Machine-readable final status: `audit/FINAL_PUBLICATION_STATE.json`
 
 ## Exact r2 candidate
@@ -49,7 +49,7 @@ Expected exact patch:
 
 The earlier `patch-parts/` experiment is deliberately retained but marked non-authoritative because transfer-byte drift was detected. External auditors should not reconstruct the candidate from that path.
 
-## Redundant archive reconstruction
+## Redundant audit-primary archive reconstruction
 
 From `audit/archive/audit-primary/`:
 
@@ -67,6 +67,18 @@ Expected archive identity:
 - 19 contained primary files, each checked against `manifest.json`
 
 The archive is redundant. Readable repository evidence and the exact r2 candidate path remain the primary audit surfaces.
+
+## Complete generated-artifact inventory
+
+`audit/archive/all-generated-manifest.json` enumerates **all 52 generated deliverable files from this workflow**, excluding only transient `__pycache__` and `.pyc` files. Every entry records exact byte size and SHA-256.
+
+A larger deterministic packaging wrapper was also generated during the workflow and is recorded for provenance:
+
+- gzip bytes: `154913`
+- gzip SHA-256: `b83eddd76669580948697b870ea8cf324e1ba079b9a2c281e8386cd5a8c62401`
+- uncompressed tar SHA-256: `e715e3c0412dcd7d2fe90f9a645ec922eb1538f043a610772fbaf2e0196a068c`
+
+That wrapper is deliberately **not authoritative and not separately transported**. Publishing nested packaging copies would create recursive archive-of-archive deliverables without adding evidence. Its unique substantive constituents are already available through readable audit paths, the reconstructible 19-file audit-primary archive, or the exact r2 patch. The 52-file manifest is the completeness ledger for generated outputs.
 
 ## Frozen high-level artifact identities
 

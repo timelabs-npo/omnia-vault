@@ -34,6 +34,17 @@
     "transport_parts": 8,
     "verifier": "audit/archive/audit-primary/verify.py"
   },
+  "complete_generated_artifact_inventory": {
+    "status": "published_manifest",
+    "path": "audit/archive/all-generated-manifest.json",
+    "file_count": 52,
+    "scope": "all generated deliverables from this workflow except __pycache__ and .pyc",
+    "redundant_gzip_wrapper_bytes": 154913,
+    "redundant_gzip_wrapper_sha256": "b83eddd76669580948697b870ea8cf324e1ba079b9a2c281e8386cd5a8c62401",
+    "redundant_tar_sha256": "e715e3c0412dcd7d2fe90f9a645ec922eb1538f043a610772fbaf2e0196a068c",
+    "wrapper_authoritative": false,
+    "note": "The manifest enumerates all 52 generated files. The wrapper itself is intentionally not a second source of truth because its unique substantive constituents are already published in readable paths, the reconstructible audit-primary archive, or the exact r2 patch."
+  },
   "external_review": {
     "status": "published_as_unverified_input",
     "authority": "none",

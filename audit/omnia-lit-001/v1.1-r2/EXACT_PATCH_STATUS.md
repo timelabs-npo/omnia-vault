@@ -1,0 +1,1 @@
+Exact r2 patch publication is not yet complete in this branch snapshot. The authoritative local patch identity is SHA-256 `594bab835d3f0a909efd70a312992ca5a3a666025309a5128e20cabc57697c47`, 84637 bytes. Do not treat reconstruction as complete until all numbered `patch-parts/part-*` files are committed and concatenation matches that identity.

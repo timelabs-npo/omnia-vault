@@ -579,16 +579,86 @@ impl StateStore {
     }
 
     pub fn integrity_check(&self) -> Result<(), StoreError> {
-        verify_identity(&self.conn, self.ctx)?;
-        let result: String = self.conn.query_row("PRAGMA integrity_check", [], |r| r.get(0))?;
+        // The diagnostic covers retained history, not only today's head. Keep
+        // every observation in one read snapshot while other writers advance.
+        let tx = self.conn.unchecked_transaction()?;
+        verify_identity(&tx, self.ctx)?;
+        let result: String = tx.query_row("PRAGMA integrity_check", [], |r| r.get(0))?;
         if result != "ok" { return Err(StoreError::Corrupt(format!("sqlite integrity_check: {result}"))); }
-        let head = load_head(&self.conn, self.ctx)?;
-        let revision = validate_revision_closure(&self.conn, self.ctx, head.revision_id)?;
+        let foreign_key_errors: i64 = tx.query_row("SELECT COUNT(*) FROM pragma_foreign_key_check", [], |r| r.get(0))?;
+        if foreign_key_errors != 0 { return Err(StoreError::Corrupt("retained foreign-key reference mismatch".into())); }
+        audit_retained_objects(&tx, self.ctx)?;
+        let head = load_head(&tx, self.ctx)?;
+        let revision = validate_revision_closure(&tx, self.ctx, head.revision_id)?;
         if revision.generation != head.generation {
             return Err(StoreError::Corrupt("head generation disagrees with referenced revision".into()));
         }
+        tx.rollback()?;
         Ok(())
     }
+}
+
+fn audit_retained_objects(conn: &Connection, ctx: HostContext) -> Result<(), StoreError> {
+    // Include unreferenced retained chunks. A valid current root says nothing
+    // about the byte identity of these immutable rows.
+    {
+        let mut stmt = conn.prepare("SELECT object_id,bytes,byte_len FROM chunks")?;
+        let mut rows = stmt.query([])?;
+        while let Some(row) = rows.next()? {
+            let object_id = ObjectId(vec32(row.get(0)?, "retained chunk id")?);
+            let bytes: Vec<u8> = row.get(1)?;
+            let byte_len = nonnegative_u64(row.get(2)?, "retained chunk length")?;
+            if byte_len > CHUNK_SIZE as u64 || bytes.len() as u64 != byte_len || ObjectId(sha256(&bytes)) != object_id {
+                return Err(StoreError::Corrupt(format!("retained chunk {object_id} identity/length mismatch")));
+            }
+        }
+    }
+    {
+        let mut stmt = conn.prepare("SELECT file_manifest_id FROM file_manifests")?;
+        let mut rows = stmt.query([])?;
+        while let Some(row) = rows.next()? {
+            verify_manifest(conn, FileManifestId(vec32(row.get(0)?, "retained manifest id")?), false)?;
+        }
+    }
+    {
+        let mut stmt = conn.prepare("SELECT tree_id FROM trees")?;
+        let mut rows = stmt.query([])?;
+        while let Some(row) = rows.next()? {
+            load_and_verify_tree(conn, TreeId(vec32(row.get(0)?, "retained tree id")?), true)?;
+        }
+    }
+    {
+        let mut stmt = conn.prepare("SELECT revision_id FROM revisions")?;
+        let mut rows = stmt.query([])?;
+        while let Some(row) = rows.next()? {
+            // Visiting every revision also checks each historical parent's
+            // canonical bytes, beyond its child's immediate generation link.
+            validate_revision_closure(conn, ctx, RevisionId(vec32(row.get(0)?, "retained revision id")?))?;
+        }
+    }
+    for table in ["receipts", "bootstrap_receipts"] {
+        let sql = format!("SELECT owner_id,actor_id,workspace_id,replica_id,operation_id FROM {table}");
+        let mut stmt = conn.prepare(&sql)?;
+        let mut rows = stmt.query([])?;
+        while let Some(row) = rows.next()? {
+            if OwnerId(vec16(row.get(0)?, "retained receipt owner")?) != ctx.owner_id ||
+               ActorId(vec16(row.get(1)?, "retained receipt actor")?) != ctx.actor_id ||
+               WorkspaceId(vec16(row.get(2)?, "retained receipt workspace")?) != ctx.workspace_id ||
+               ReplicaId(vec16(row.get(3)?, "retained receipt replica")?) != ctx.replica_id {
+                return Err(StoreError::Corrupt("retained receipt namespace mismatch".into()));
+            }
+            let operation_id = OperationId(vec16(row.get(4)?, "retained receipt operation")?);
+            let found = if table == "receipts" {
+                load_publish_receipt(conn, ctx, operation_id)?.is_some()
+            } else {
+                load_bootstrap_receipt(conn, ctx, operation_id)?.is_some()
+            };
+            if !found { return Err(StoreError::Corrupt("retained receipt disappeared in read snapshot".into())); }
+        }
+    }
+    let heads: i64 = conn.query_row("SELECT COUNT(*) FROM heads", [], |r| r.get(0))?;
+    if heads != 1 { return Err(StoreError::Corrupt("single-workspace head cardinality mismatch".into())); }
+    Ok(())
 }
 
 fn sqlite_version_is_fixed(version: &str) -> bool {

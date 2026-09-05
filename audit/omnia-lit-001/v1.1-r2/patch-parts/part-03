@@ -1,0 +1,216 @@
+pdate changed {changed} rows")));
++        }
++        test_failpoint("after_head_update");
++
++        let receipt = finalize_publish_receipt(PublishReceipt {
++            kind: PublishReceiptKind::LocalCommitted,
++            owner_id: self.ctx.owner_id,
++            actor_id: self.ctx.actor_id,
++            workspace_id: self.ctx.workspace_id,
++            replica_id: self.ctx.replica_id,
++            operation_id: request.operation_id,
++            request_digest,
++            expected_head: current,
++            result_head: Head { revision_id: new_revision_id, generation: new_generation },
++            item_id: request.item_id,
++            file_manifest_id: captured.file_manifest_id,
++            canonical_bytes: Vec::new(),
++            receipt_digest: ReceiptDigest([0; 32]),
++        });
++        insert_publish_receipt(&tx, &receipt)?;
++        test_failpoint("after_receipt_insert");
++        test_failpoint("before_commit");
++
++        if let Err(e) = tx.commit() {
++            self.write_blocked = true;
++            return Err(StoreError::OutcomeUnknown(e.to_string()));
++        }
++        test_failpoint("after_commit_before_response");
++        Ok(receipt)
++    }
++
++    pub fn get_head(&self) -> Result<Head, StoreError> {
++        verify_identity(&self.conn, self.ctx)?;
++        let head = load_head(&self.conn, self.ctx)?;
++        let revision = validate_revision_closure(&self.conn, self.ctx, head.revision_id)?;
++        if revision.generation != head.generation {
++            return Err(StoreError::Corrupt("head generation disagrees with referenced revision".into()));
++        }
++        Ok(head)
++    }
++
++    pub fn get_operation(&self, operation_id: OperationId) -> Result<OperationObservation, StoreError> {
++        verify_identity(&self.conn, self.ctx)?;
++        if let Some(receipt) = load_publish_receipt(&self.conn, self.ctx, operation_id)? {
++            return Ok(OperationObservation::Recorded(OperationReceipt::Publish(receipt)));
++        }
++        if let Some(receipt) = load_bootstrap_receipt(&self.conn, self.ctx, operation_id)? {
++            return Ok(OperationObservation::Recorded(OperationReceipt::Bootstrap(receipt)));
++        }
++        Ok(OperationObservation::NotRecorded)
++    }
++
++    pub fn read_item(&self, revision_id: RevisionId, item_id: ItemId) -> Result<Vec<u8>, StoreError> {
++        verify_identity(&self.conn, self.ctx)?;
++        let revision = validate_revision_closure(&self.conn, self.ctx, revision_id)?;
++        let entries = load_and_verify_tree(&self.conn, revision.tree_id, false)?;
++        let manifest_id = entries.get(&item_id).copied().ok_or(StoreError::ItemNotFound)?;
++        verify_manifest(&self.conn, manifest_id, true)?.ok_or(StoreError::Corrupt("manifest read returned no bytes".into()))
++    }
++
++    pub fn is_descendant(&self, descendant: RevisionId, ancestor: RevisionId) -> Result<bool, StoreError> {
++        verify_identity(&self.conn, self.ctx)?;
++        let mut cur = descendant;
++        loop {
++            if cur == ancestor { return Ok(true); }
++            let rec = load_revision_record(&self.conn, cur)?.ok_or(StoreError::RevisionNotFound)?;
++            validate_revision_record(&self.conn, self.ctx, &rec)?;
++            match rec.parent_revision_id {
++                Some(parent) => cur = parent,
++                None => return Ok(false),
++            }
++        }
++    }
++
++    pub fn integrity_check(&self) -> Result<(), StoreError> {
++        verify_identity(&self.conn, self.ctx)?;
++        let result: String = self.conn.query_row("PRAGMA integrity_check", [], |r| r.get(0))?;
++        if result != "ok" { return Err(StoreError::Corrupt(format!("sqlite integrity_check: {result}"))); }
++        let head = load_head(&self.conn, self.ctx)?;
++        let revision = validate_revision_closure(&self.conn, self.ctx, head.revision_id)?;
++        if revision.generation != head.generation {
++            return Err(StoreError::Corrupt("head generation disagrees with referenced revision".into()));
++        }
++        Ok(())
++    }
++}
++
++fn sqlite_version_is_fixed(version: &str) -> bool {
++    let mut parts = version.split('.');
++    let Some(major) = parts.next().and_then(|v| v.parse::<u32>().ok()) else { return false; };
++    let Some(minor) = parts.next().and_then(|v| v.parse::<u32>().ok()) else { return false; };
++    let Some(patch) = parts.next().and_then(|v| v.parse::<u32>().ok()) else { return false; };
++    if major != 3 { return false; }
++    (minor > 51)
++        || (minor == 51 && patch >= 3)
++        || (minor == 50 && patch >= 7)
++        || (minor == 44 && patch >= 6)
++}
++
++fn diagnostic_vfs_name(conn: &Connection) -> Option<String> {
++    unsafe {
++        let mut name_ptr: *mut c_char = std::ptr::null_mut();
++        let rc = rusqlite::ffi::sqlite3_file_control(
++            conn.handle(),
++            b"main\0".as_ptr() as *const c_char,
++            rusqlite::ffi::SQLITE_FCNTL_VFSNAME,
++            (&mut name_ptr as *mut *mut c_char).cast::<c_void>(),
++        );
++        if rc != rusqlite::ffi::SQLITE_OK || name_ptr.is_null() { return None; }
++        let name = CStr::from_ptr(name_ptr).to_string_lossy().into_owned();
++        rusqlite::ffi::sqlite3_free(name_ptr.cast::<c_void>());
++        Some(name)
++    }
++}
++
++fn ensure_supported_sqlite(conn: &Connection) -> Result<(), StoreError> {
++    let sqlite_version: String = conn.query_row("SELECT sqlite_version()", [], |r| r.get(0))?;
++    if !sqlite_version_is_fixed(&sqlite_version) {
++        return Err(StoreError::NamespaceMismatch(format!(
++            "linked SQLite {sqlite_version} is outside the documented fixed WAL-reset release lines"
++        )));
++    }
++    Ok(())
++}
++
++fn configure_connection(conn: &Connection) -> Result<(), StoreError> {
++    ensure_supported_sqlite(conn)?;
++    conn.busy_timeout(Duration::from_millis(BUSY_TIMEOUT_MS))?;
++    let journal: String = conn.query_row("PRAGMA journal_mode=WAL", [], |r| r.get(0))?;
++    if !journal.eq_ignore_ascii_case("wal") { return Err(StoreError::NamespaceMismatch(format!("required WAL, got {journal}"))); }
++    conn.execute_batch("PRAGMA synchronous=FULL; PRAGMA foreign_keys=ON;")?;
++    #[cfg(target_os = "macos")]
++    conn.execute_batch("PRAGMA fullfsync=ON;")?;
++    let synchronous: i64 = conn.query_row("PRAGMA synchronous", [], |r| r.get(0))?;
++    let foreign_keys: i64 = conn.query_row("PRAGMA foreign_keys", [], |r| r.get(0))?;
++    if synchronous != 2 { return Err(StoreError::NamespaceMismatch(format!("required synchronous=FULL(2), got {synchronous}"))); }
++    if foreign_keys != 1 { return Err(StoreError::NamespaceMismatch("foreign_keys did not enable".into())); }
++    #[cfg(target_os = "macos")]
++    {
++        let fullfsync: i64 = conn.query_row("PRAGMA fullfsync", [], |r| r.get(0))?;
++        if fullfsync != 1 { return Err(StoreError::NamespaceMismatch("fullfsync did not enable".into())); }
++    }
++    Ok(())
++}
++
++fn ensure_schema(conn: &mut Connection) -> Result<(), StoreError> {
++    let schema_objects: i64 = conn.query_row("SELECT COUNT(*) FROM sqlite_master WHERE name NOT LIKE 'sqlite_%'", [], |r| r.get(0))?;
++    if schema_objects == 0 {
++        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
++        tx.execute_batch(SQL_SCHEMA)?;
++        tx.execute("INSERT INTO omnia_meta(key,value) VALUES('schema_name',?1)", params![SCHEMA_NAME])?;
++        tx.execute("INSERT INTO omnia_meta(key,value) VALUES('contract_version',?1)", params![CONTRACT_VERSION.as_bytes()])?;
++        tx.commit()?;
++        return Ok(());
++    }
++    let meta_exists: i64 = conn.query_row("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='omnia_meta'", [], |r| r.get(0))?;
++    if meta_exists != 1 { return Err(StoreError::NamespaceMismatch("nonempty database is not an OMNIA-LIT-001 store".into())); }
++    let user_version: i64 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
++    if user_version != 1 { return Err(StoreError::NamespaceMismatch(format!("unsupported SQLite user_version {user_version}"))); }
++    let schema_name = meta_blob(conn, "schema_name")?.ok_or_else(|| StoreError::NamespaceMismatch("missing schema_name".into()))?;
++    if schema_name != SCHEMA_NAME { return Err(StoreError::NamespaceMismatch("schema_name mismatch".into())); }
++    let contract = meta_blob(conn, "contract_version")?.ok_or_else(|| StoreError::NamespaceMismatch("missing contract_version".into()))?;
++    if contract != CONTRACT_VERSION.as_bytes() { return Err(StoreError::NamespaceMismatch("contract_version mismatch".into())); }
++    Ok(())
++}
++
++fn meta_blob(conn: &Connection, key: &str) -> Result<Option<Vec<u8>>, StoreError> {
++    Ok(conn.query_row("SELECT value FROM omnia_meta WHERE key=?1", params![key], |r| r.get(0)).optional()?)
++}
++
++fn identity_present(conn: &Connection) -> Result<bool, StoreError> {
++    Ok(meta_blob(conn, "owner_id")?.is_some() || meta_blob(conn, "workspace_id")?.is_some() || meta_blob(conn, "replica_id")?.is_some())
++}
++
++fn set_identity(tx: &Transaction<'_>, ctx: HostContext) -> Result<(), StoreError> {
++    tx.execute("INSERT INTO omnia_meta(key,value) VALUES('owner_id',?1)", params![ctx.owner_id.as_bytes().as_slice()])?;
++    tx.execute("INSERT INTO omnia_meta(key,value) VALUES('workspace_id',?1)", params![ctx.workspace_id.as_bytes().as_slice()])?;
++    tx.execute("INSERT INTO omnia_meta(key,value) VALUES('replica_id',?1)", params![ctx.replica_id.as_bytes().as_slice()])?;
++    Ok(())
++}
++
++fn verify_identity(conn: &Connection, ctx: HostContext) -> Result<(), StoreError> {
++    let owner = meta_blob(conn, "owner_id")?.ok_or(StoreError::NotInitialized)?;
++    let workspace = meta_blob(conn, "workspace_id")?.ok_or(StoreError::NotInitialized)?;
++    let replica = meta_blob(conn, "replica_id")?.ok_or(StoreError::NotInitialized)?;
++    if owner.as_slice() != ctx.owner_id.as_bytes() || workspace.as_slice() != ctx.workspace_id.as_bytes() || replica.as_slice() != ctx.replica_id.as_bytes() { return Err(StoreError::Unauthorized); }
++    Ok(())
++}
++
++fn to_i64(v: u64) -> Result<i64, StoreError> { i64::try_from(v).map_err(|_| StoreError::GenerationOverflow) }
++fn vec16(v: Vec<u8>, label: &str) -> Result<[u8; 16], StoreError> { v.try_into().map_err(|_| StoreError::Corrupt(format!("{label} width != 16"))) }
++fn vec32(v: Vec<u8>, label: &str) -> Result<[u8; 32], StoreError> { v.try_into().map_err(|_| StoreError::Corrupt(format!("{label} width != 32"))) }
++fn nonnegative_u64(v: i64, label: &str) -> Result<u64, StoreError> { u64::try_from(v).map_err(|_| StoreError::Corrupt(format!("negative {label}"))) }
++
++fn load_head(conn: &Connection, ctx: HostContext) -> Result<Head, StoreError> {
++    let row: Option<(Vec<u8>, i64)> = conn.query_row("SELECT revision_id,generation FROM heads WHERE workspace_id=?1 AND replica_id=?2", params![ctx.workspace_id.as_bytes().as_slice(), ctx.replica_id.as_bytes().as_slice()], |r| Ok((r.get(0)?, r.get(1)?))).optional()?;
++    let (revision, generation) = row.ok_or(StoreError::NotInitialized)?;
++    Ok(Head { revision_id: RevisionId(vec32(revision, "head revision")?), generation: nonnegative_u64(generation, "head generation")? })
++}
++
++fn count_publish_receipts(conn: &Connection, ctx: HostContext) -> Result<u64, StoreError> {
++    let n: i64 = conn.query_row("SELECT COUNT(*) FROM receipts WHERE owner_id=?1 AND workspace_id=?2 AND replica_id=?3", params![ctx.owner_id.as_bytes().as_slice(), ctx.workspace_id.as_bytes().as_slice(), ctx.replica_id.as_bytes().as_slice()], |r| r.get(0))?;
++    nonnegative_u64(n, "receipt count")
++}
++
++fn load_revision_record(conn: &Connection, revision_id: RevisionId) -> Result<Option<RevisionRecord>, StoreError> {
++    let row = conn.query_row("SELECT workspace_id,replica_id,actor_id,operation_id,generation,parent_revision_id,tree_id,canonical FROM revisions WHERE revision_id=?1", params![revision_id.as_bytes().as_slice()], |r| Ok((r.get::<_, Vec<u8>>(0)?, r.get::<_, Vec<u8>>(1)?, r.get::<_, Vec<u8>>(2)?, r.get::<_, Vec<u8>>(3)?, r.get::<_, i64>(4)?, r.get::<_, Option<Vec<u8>>>(5)?, r.get::<_, Vec<u8>>(6)?, r.get::<_, Vec<u8>>(7)?))).optional()?;
++    let Some((workspace, replica, actor, operation, generation, parent, tree, canonical)) = row else { return Ok(None); };
++    Ok(Some(RevisionRecord { revision_id, workspace_id:WorkspaceId(vec16(workspace,"revision workspace")?), replica_id:ReplicaId(vec16(replica,"revision replica")?), actor_id:ActorId(vec16(actor,"revision actor")?), operation_id:OperationId(vec16(operation,"revision operation")?), generation:nonnegative_u64(generation,"revision generation")?, parent_revision_id:match parent{Some(v)=>Some(RevisionId(vec32(v,"parent revision")?)),None=>None}, tree_id:TreeId(vec32(tree,"revision tree")?), canonical }))
++}
++
++fn validate_revision_record(conn: &Connection, ctx: HostContext, record: &RevisionRecord) -> Result<(), StoreError> {
++    if record.workspace_id != ctx.workspace_id || record.replica_id != ctx.replica_id { return Err(StoreError::Corrupt("revision namespace mismatch".into())); }
++    let expected = revision_bytes(record.workspace_id,record.replica_id,record.actor_id,record.operation_id,record.generation,record.parent_revision_id,record.tree_id).map_err(|e|StoreError::Corrupt(e.into()))?;
++    if expected != record.canonical || RevisionId(sha256(&expected)) != record.revision_id {
++        return Err(StoreError::Corrupt(format!("revision {} canonical identity mismatch", re

@@ -1,0 +1,1 @@
+Publication integrity note: parts 05 and 06 were initially transferred through rendered diff text and are being replaced from exact local bytes. Do not verify/reconstruct until `SHA256SUMS.txt` and `verify.sh` are committed and `PUBLICATION_STATE.json` says `PUBLISHED_RECONSTRUCTIBLE`.

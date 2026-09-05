@@ -2,6 +2,6 @@
   "status": "IN_PROGRESS",
   "branch": "audit/rhea-step23-omnia-lit-001-v1.1-r2",
   "baseline": "f5995536fede02d403f0525ff9093996457efecb",
-  "latest_completed_step": "byte-exact independent reference_oracle.py published and reconciled",
+  "latest_completed_step": "reconciled exact oracle commit prepared",
   "runtime_gates": "LIT-01..12 NOT_EXECUTED"
 }

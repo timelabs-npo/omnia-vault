@@ -1,0 +1,84 @@
+<Window x:Class="Omnia.Windows.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:Omnia.Windows" Title="Omnia · Windows">
+  <Grid>
+    <NavigationView x:Name="Navigation" PaneDisplayMode="Left" IsBackButtonVisible="Collapsed"
+                    IsSettingsVisible="False" OpenPaneLength="270" SelectionChanged="Navigate">
+      <NavigationView.PaneHeader>
+        <StackPanel Margin="16,20,12,28" Spacing="4">
+          <TextBlock Text="OMNIA" FontSize="28" FontWeight="SemiBold" />
+          <TextBlock Text="Windows 11" Style="{ThemeResource CaptionTextBlockStyle}" />
+        </StackPanel>
+      </NavigationView.PaneHeader>
+      <NavigationView.MenuItems>
+        <NavigationViewItem Content="System Cleanup" Tag="SystemCleanup"><NavigationViewItem.Icon><SymbolIcon Symbol="Clear" /></NavigationViewItem.Icon></NavigationViewItem>
+        <NavigationViewItem Content="File &amp; Caches Organizer" Tag="FileCachesOrganizer"><NavigationViewItem.Icon><SymbolIcon Symbol="Folder" /></NavigationViewItem.Icon></NavigationViewItem>
+        <NavigationViewItem Content="App Manager" Tag="AppManager"><NavigationViewItem.Icon><SymbolIcon Symbol="AllApps" /></NavigationViewItem.Icon></NavigationViewItem>
+        <NavigationViewItem Content="Data Propagator" Tag="DataPropagator"><NavigationViewItem.Icon><SymbolIcon Symbol="Sync" /></NavigationViewItem.Icon></NavigationViewItem>
+        <NavigationViewItemSeparator />
+        <NavigationViewItem Content="Operations / Receipts" Tag="Operations"><NavigationViewItem.Icon><SymbolIcon Symbol="Document" /></NavigationViewItem.Icon></NavigationViewItem>
+      </NavigationView.MenuItems>
+      <NavigationView.PaneFooter>
+        <TextBlock Text="Review workspace&#xA;Changes are unavailable" Margin="20,16" TextWrapping="Wrap" Opacity="0.7" />
+      </NavigationView.PaneFooter>
+      <Grid Margin="32,28,32,24" RowSpacing="18">
+        <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
+        <StackPanel Spacing="8">
+          <TextBlock x:Name="PageTitle" Text="System Cleanup" Style="{ThemeResource TitleTextBlockStyle}" />
+          <TextBlock x:Name="PageDescription" TextWrapping="Wrap" Opacity="0.8" />
+        </StackPanel>
+        <InfoBar x:Name="StateBanner" Grid.Row="1" IsOpen="True" IsClosable="False" Severity="Informational" Title="Host unavailable" />
+        <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="12">
+          <Button x:Name="RefreshButton" Content="Refresh observations" Click="RefreshHost" />
+          <Button x:Name="CatalogButton" Content="Review maintenance checks" Click="ShowCatalog" />
+          <Button x:Name="MutationButton" Content="Execute cleanup" IsEnabled="False" />
+          <ProgressRing x:Name="Busy" Width="24" Height="24" IsActive="False" />
+        </StackPanel>
+        <ScrollViewer Grid.Row="3" HorizontalScrollBarVisibility="Disabled">
+          <StackPanel Spacing="16">
+            <TextBlock x:Name="PageStatus" TextWrapping="Wrap" />
+            <Expander x:Name="CatalogExclusions" Header="Unavailable checks" HorizontalAlignment="Stretch" Visibility="Collapsed">
+              <TextBlock x:Name="ExclusionText" TextWrapping="Wrap" />
+            </Expander>
+            <ItemsControl x:Name="Candidates">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="local:CandidateRow">
+                  <Border Margin="0,0,0,12" Padding="20" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+                    <StackPanel Spacing="9">
+                      <TextBlock Text="{x:Bind Name}" Style="{ThemeResource SubtitleTextBlockStyle}" TextWrapping="Wrap" />
+                      <TextBlock Text="{x:Bind Locator}" FontFamily="Consolas" TextWrapping="Wrap" IsTextSelectionEnabled="True" />
+                      <TextBlock Text="{x:Bind Measurements}" TextWrapping="Wrap" />
+                      <TextBlock Text="{x:Bind Risk}" TextWrapping="Wrap" />
+                      <Expander Header="Observation details" HorizontalAlignment="Stretch">
+                        <StackPanel Spacing="8">
+                          <TextBlock Text="{x:Bind Identity}" TextWrapping="Wrap" IsTextSelectionEnabled="True" />
+                          <TextBlock Text="{x:Bind Provenance}" Style="{ThemeResource CaptionTextBlockStyle}" TextWrapping="Wrap" IsTextSelectionEnabled="True" />
+                        </StackPanel>
+                      </Expander>
+                      <Button Content="Review proposal" Click="PrepareProposal" Tag="{x:Bind Candidate}" />
+                    </StackPanel>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <ItemsControl x:Name="Operations">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="local:OperationRow">
+                  <Border Margin="0,0,0,12" Padding="20" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                    <StackPanel Spacing="9">
+                      <TextBlock Text="{x:Bind Description}" Style="{ThemeResource SubtitleTextBlockStyle}" TextWrapping="Wrap" />
+                      <TextBlock Text="{x:Bind Status}" TextWrapping="Wrap" />
+                      <TextBlock Text="{x:Bind Assessment}" TextWrapping="Wrap" />
+                      <TextBlock Text="{x:Bind Evidence}" FontFamily="Consolas" TextWrapping="Wrap" IsTextSelectionEnabled="True" />
+                    </StackPanel>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </ScrollViewer>
+      </Grid>
+    </NavigationView>
+  </Grid>
+</Window>

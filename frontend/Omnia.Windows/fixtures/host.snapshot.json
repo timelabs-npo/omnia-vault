@@ -1,0 +1,97 @@
+{
+  "schema_version": "omnia-windows-projection/v1",
+  "state": "known",
+  "observed_at": "2026-09-06T12:00:00+00:00",
+  "detail": "Synthetic test fixture; not device observations.",
+  "candidates": [
+    {
+      "candidate_id": "fixture-001",
+      "module": "system_cleanup",
+      "proposal": {
+        "schema_version": "maintenance-proposal/v1",
+        "proposal_id": "fixture-cache-001",
+        "source": {
+          "system": "AdventDevInc/kudu",
+          "revision": "92dbc52336ad9c9eb2968a180d22c72670de3b45",
+          "rule_id": "system/cleanTargets/0"
+        },
+        "platform": {
+          "family": "win32",
+          "adapter": "omnia-maintenance-win32"
+        },
+        "intent": "discover_cleanup_candidate",
+        "effect": {
+          "mode": "propose_reclaim",
+          "destructive": false,
+          "authority": "proposal_only"
+        },
+        "target": {
+          "class": "filesystem_region",
+          "locator": "${LOCALAPPDATA}/Temp",
+          "display_name": "Fixture temporary data"
+        },
+        "risk": {
+          "level": "medium",
+          "requires_elevation": false,
+          "user_data_risk": "unknown"
+        },
+        "preconditions": {
+          "deep_recency_check": true,
+          "must_be_within_scope": true,
+          "requires_restore_evidence": true
+        },
+        "evidence_requirements": [
+          "source_rule_provenance",
+          "resolved_target_identity",
+          "fresh_observation",
+          "scope_validation",
+          "age_validation",
+          "privilege_validation",
+          "recovery_or_recreate_path",
+          "independent_policy_decision",
+          "execution_receipt"
+        ]
+      },
+      "size_bytes": {
+        "state": "known",
+        "value": 0,
+        "observed_at": "2026-09-06T12:00:00+00:00"
+      },
+      "age_days": {
+        "state": "unknown"
+      },
+      "resolved_item_id": {
+        "state": "unknown"
+      },
+      "expected_head": {
+        "state": "unavailable"
+      }
+    }
+  ],
+  "operations": [
+    {
+      "operation_id": "operation-fixture-001",
+      "description": "Synthetic host-reported completion",
+      "status": {
+        "state": "known",
+        "value": "succeeded",
+        "observed_at": "2026-09-06T12:00:00+00:00"
+      },
+      "expected_head": {
+        "state": "known",
+        "value": "host-head-before-fixture",
+        "observed_at": "2026-09-06T12:00:00+00:00"
+      },
+      "receipt": {
+        "receipt_id": "receipt-fixture-001",
+        "operation_id": "operation-fixture-001",
+        "issuer": "fixture-host",
+        "expected_head": "host-head-before-fixture",
+        "resulting_head": "host-head-after-fixture",
+        "outcome": "succeeded",
+        "recorded_at": "2026-09-06T12:00:00+00:00",
+        "evidence_digest": "fixture-only-not-cryptographic-proof"
+      }
+    }
+  ]
+}

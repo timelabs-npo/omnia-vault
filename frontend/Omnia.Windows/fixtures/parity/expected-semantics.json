@@ -1,0 +1,30 @@
+{
+  "intent": "discover_cleanup_candidate",
+  "effect": {
+    "mode": "propose_reclaim",
+    "destructive": false,
+    "authority": "proposal_only"
+  },
+  "target_class": "filesystem_region",
+  "risk": {
+    "level": "medium",
+    "requires_elevation": false,
+    "user_data_risk": "unknown"
+  },
+  "preconditions": {
+    "deep_recency_check": true,
+    "must_be_within_scope": true,
+    "requires_restore_evidence": true
+  },
+  "evidence_requirements": [
+    "source_rule_provenance",
+    "resolved_target_identity",
+    "fresh_observation",
+    "scope_validation",
+    "age_validation",
+    "privilege_validation",
+    "recovery_or_recreate_path",
+    "independent_policy_decision",
+    "execution_receipt"
+  ]
+}

@@ -1,0 +1,6 @@
+{
+  "path": "${HOME}/.cache/example",
+  "subcategory": "Equivalent temporary data",
+  "needsAdmin": false,
+  "deepRecencyCheck": true
+}

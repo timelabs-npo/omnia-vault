@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework><TreatWarningsAsErrors>true</TreatWarningsAsErrors></PropertyGroup>
+  <ItemGroup><ProjectReference Include="../Omnia.Contracts/Omnia.Contracts.csproj" /></ItemGroup>
+  <ItemGroup><EmbeddedResource Include="../../fixtures/kudu/win32.system.json" LogicalName="kudu.win32.system.json" /></ItemGroup>
+</Project>

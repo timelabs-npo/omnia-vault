@@ -1,0 +1,18 @@
+{
+  "candidate_revision":"r2",
+  "handoff":"OMNIA-LIT-001/v1.1",
+  "schema_version":1,
+  "key_artifacts": {
+    "CONTRACT_V1_1.md":"87260bb3182f80ddac1e95c0119f523673c597c9f1bd8fa5f2905d5079ab842b",
+    "OMNIA-LIT-001-v1.1.patch":"594bab835d3f0a909efd70a312992ca5a3a666025309a5128e20cabc57697c47",
+    "patch/supervisor/src/intact_transition/store.rs":"10ceb8dfe83970794b42d327f35471f522daca913ae3302b84f1728b33f17851",
+    "validator/golden_vectors.json":"52d9010b42ce5a8563574365338f485c1f38e76b6c4b425f5681c8149906a89b",
+    "validator/reference_oracle.py":"d067ed3fb6be3bde396aa155ccd7da20008084d5964ecc9ec37fe5108193ca8b",
+    "validator/run_candidate.py":"b39dd1d6f8bcbc0a46f7e445b2a4d0487e947f5cc567344a4f310d0802de0ee6",
+    "validator/static_patch_review.json":"cf7ff89753b3d207793dd8bbbd79ea1591ac8cc0a62bfff4dc455ffd25d1dbac",
+    "validator/static_patch_review.py":"4e24d8d4d86aad1d9083cb67f88ef983d663ffa44bc73e7e4ac80e5be0d56a85",
+    "parent/OMNIA-LIT-001_ACCEPTANCE.json":"953cff4096fca4ff4968561f855a7dcc35b7b17cda4f3e651ee24a46a4a456d2",
+    "parent/OMNIA-LIT-001_HANDOFF.md":"7b188724d0d6d0a8ead893e7f71ac29c8a714997fc40b4419ac9dda943e97694"
+  },
+  "note":"Full local manifest contains per-file sizes/hashes. This GitHub audit manifest freezes the identities needed to reconstruct and compare the r2 candidate."
+}

@@ -1,0 +1,18 @@
+{
+  "base_commit": "f5995536fede02d403f0525ff9093996457efecb",
+  "candidate_revision": "r2",
+  "executed_here": {
+    "candidate_repair_review": {"repairs":["reconcile identical concurrent bootstrap after BEGIN IMMEDIATE","verify linked SQLite fixed-version before schema writes and verify existing identity before mutable durability PRAGMAs"],"runtime_executed":false,"status":"PASS_STATIC_ONLY"},
+    "patch_apply_check": {"patch_sha256":"594bab835d3f0a909efd70a312992ca5a3a666025309a5128e20cabc57697c47","status":"PASS"},
+    "python_syntax_checks":{"status":"PASS"},
+    "reference_oracle":{"artifact":"validator/golden_vectors.json","status":"PASS"},
+    "shell_syntax_checks":{"status":"PASS"},
+    "static_candidate_review":{"artifact":"validator/static_patch_review.json","checks":27,"status":"PASS"}
+  },
+  "gate_status": {"LIT-01":"NOT_EXECUTED","LIT-02":"NOT_EXECUTED","LIT-03":"NOT_EXECUTED","LIT-04":"NOT_EXECUTED","LIT-05":"NOT_EXECUTED","LIT-06":"NOT_EXECUTED","LIT-07":"NOT_EXECUTED","LIT-08":"NOT_EXECUTED","LIT-09":"NOT_EXECUTED","LIT-10":"NOT_EXECUTED","LIT-11":"NOT_EXECUTED","LIT-12":"NOT_EXECUTED"},
+  "handoff":"OMNIA-LIT-001/v1.1",
+  "known_scope_limits":["The CLI is a QA surface, not a production authentication boundary.","The candidate stores immutable content inside one SQLite database for this experiment; no provider or external-object commit protocol is implemented.","Non-COMMIT SQLite I/O fault behavior still requires LIT-06 fault injection and may require implementation refinement.","VFS/power-loss qualification requires a separate test model; SIGKILL is not equivalent to power loss.","No legacy Omnia mutation path is repaired or declared safe by this additive slice."],
+  "not_executed_here":["Rust compilation or linking","candidate SQLite runtime","concurrent-process candidate execution","SIGKILL recovery against candidate","VFS/I/O fault injection","simulated power loss","hardware power-loss testing","native app integration/signing"],
+  "schema_version":1,
+  "scope":"additive candidate for first local intact-transition slice"
+}

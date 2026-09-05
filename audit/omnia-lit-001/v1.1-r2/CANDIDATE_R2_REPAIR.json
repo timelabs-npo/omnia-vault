@@ -1,0 +1,22 @@
+{
+  "base_commit": "f5995536fede02d403f0525ff9093996457efecb",
+  "candidate_revision": "r2",
+  "contract_version": "OMNIA-LIT-001/v1.1",
+  "gate_changes": {},
+  "immutable_zero_trust_artifacts": {
+    "CONTRACT_V1_1.md": "87260bb3182f80ddac1e95c0119f523673c597c9f1bd8fa5f2905d5079ab842b",
+    "parent/OMNIA-LIT-001_ACCEPTANCE.json": "953cff4096fca4ff4968561f855a7dcc35b7b17cda4f3e651ee24a46a4a456d2",
+    "parent/OMNIA-LIT-001_HANDOFF.md": "7b188724d0d6d0a8ead893e7f71ac29c8a714997fc40b4419ac9dda943e97694",
+    "validator/golden_vectors.json": "52d9010b42ce5a8563574365338f485c1f38e76b6c4b425f5681c8149906a89b",
+    "validator/reference_oracle.py": "d067ed3fb6be3bde396aa155ccd7da20008084d5964ecc9ec37fe5108193ca8b",
+    "validator/run_candidate.py": "b39dd1d6f8bcbc0a46f7e445b2a4d0487e947f5cc567344a4f310d0802de0ee6",
+    "validator/static_patch_review.py": "4e24d8d4d86aad1d9083cb67f88ef983d663ffa44bc73e7e4ac80e5be0d56a85"
+  },
+  "repairs": [
+    {"id":"R2-01","issue":"Concurrent identical InitWorkspaceV1 could return AlreadyInitialized after waiting for BEGIN IMMEDIATE instead of replaying the recorded bootstrap receipt.","change":"Inside the serialized init transaction, re-verify identity and consult bootstrap_receipts for the operation ID before returning AlreadyInitialized.","contract_basis":"Repeated identical init returns its recorded result."},
+    {"id":"R2-02","issue":"StateStore::open created schema before rejecting an unsupported linked SQLite version, and configured durability PRAGMAs before rejecting an unauthorized existing identity.","change":"Run a non-mutating linked SQLite version gate before ensure_schema; on existing stores verify owner/workspace/replica identity before configure_connection.","contract_basis":"Runtime engine gate precedes writes; unauthorized scope must not acquire a mutation path."}
+  ],
+  "runtime_claims": [],
+  "schema_version": 1,
+  "status": "STATIC_REPAIR_ONLY_NOT_RUNTIME_QUALIFIED"
+}

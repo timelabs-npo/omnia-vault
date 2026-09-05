@@ -1,0 +1,8 @@
+{
+  "schema_version":1,
+  "status":"PASS",
+  "scope":"Static candidate-source review only. No Rust compiler, SQLite runtime, concurrency, crash, or product execution in this cloud container.",
+  "checks_total":27,
+  "candidate_file_sha256":{"patch/supervisor/src/bin/omnia_lit_001.rs":"08fb5bd6948fa6941c890dc2bd59ce3075c053b3098115ea01010a23c8482951","patch/supervisor/src/intact_transition/encoding.rs":"4e9dec3486f286710efa8ca79bbe02d1de08aa037aa36e0a617798269e9f03bd","patch/supervisor/src/intact_transition/mod.rs":"831a252efd4a5cc51baefa6dbf0fa5e5cfda8ac8df9e31533309e0c97439c56c","patch/supervisor/src/intact_transition/store.rs":"10ceb8dfe83970794b42d327f35471f522daca913ae3302b84f1728b33f17851","patch/supervisor/src/intact_transition/types.rs":"1b5ac8d043be44184faf3784f59e08650aa966ba5b87d0f821ab49b9e7fb4505","patch/supervisor/src/lib.rs":"c982e93777c1f7d57fef07d498f228215a45461d8eae9255819c69bd56d1ada2"},
+  "passed_checks":["canonical tags present","BEGIN IMMEDIATE present","operation lookup precedes fresh-head comparison","conditional head predicate covers revision+generation","receipt insert precedes COMMIT","head and receipt share transaction scope statically","foreign_keys configured/read back","WAL+FULL configured/read back","macOS fullfsync branch present","linked SQLite version gate precedes writes","VFS diagnostic present","process-kill failpoints present","forbidden runtime surfaces absent from core candidate","legacy main.rs not replaced","Cargo.toml not modified","six lexical delimiter checks"]
+}

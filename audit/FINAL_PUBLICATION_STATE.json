@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "status": "AUDIT_PUBLICATION_COMPLETE_RUNTIME_QUALIFICATION_PENDING",
+  "repository": "timelabs-npo/omnia-vault",
+  "branch": "audit/rhea-step23-omnia-lit-001-v1.1-r2",
+  "frozen_product_baseline": "f5995536fede02d403f0525ff9093996457efecb",
+  "product_default_branch_modified_by_this_publication": false,
+  "architecture": {
+    "step1_extraction_protocol": "published",
+    "step2_semantic_core": "published",
+    "step2_source_registry": "published",
+    "step3_decisions_acceptance_derivation": "published",
+    "step3_master_plan": "published",
+    "independent_review_and_bounded_evidence": "published"
+  },
+  "omnia_lit_001": {
+    "v1_0_contract_and_acceptance": "published",
+    "v1_1_contract": "frozen_and_published",
+    "v1_1_reference_oracle": "frozen_and_published",
+    "v1_1_golden_vectors": "byte_exact_and_published",
+    "candidate_r2": "published_as_exact_reconstructible_patch",
+    "candidate_r2_patch_sha256": "594bab835d3f0a909efd70a312992ca5a3a666025309a5128e20cabc57697c47",
+    "candidate_r2_patch_path": "audit/omnia-lit-001/v1.1-r2/exact-patch-gzip-base64/",
+    "deprecated_raw_patch_transfer_path": "audit/omnia-lit-001/v1.1-r2/patch-parts/",
+    "deprecated_raw_patch_transfer_authoritative": false
+  },
+  "redundant_audit_primary_archive": {
+    "status": "published_reconstructible",
+    "path": "audit/archive/audit-primary/",
+    "file_count": 19,
+    "gzip_bytes": 56131,
+    "gzip_sha256": "896ab99289a2fd508713d71bdc101d4908d38eba20b284f4e278b133cc6d4682",
+    "tar_sha256": "79a050640a2d681bceddd7a0a11f1e502a21e87629644fb52c7c7f08b148e46a",
+    "transport_parts": 8,
+    "verifier": "audit/archive/audit-primary/verify.py"
+  },
+  "external_review": {
+    "status": "published_as_unverified_input",
+    "authority": "none",
+    "note": "External prose assessment is retained for audit context and is not promoted to source-observed evidence."
+  },
+  "runtime_qualification": {
+    "LIT-01": "NOT_EXECUTED",
+    "LIT-02": "NOT_EXECUTED",
+    "LIT-03": "NOT_EXECUTED",
+    "LIT-04": "NOT_EXECUTED",
+    "LIT-05": "NOT_EXECUTED",
+    "LIT-06": "NOT_EXECUTED",
+    "LIT-07": "NOT_EXECUTED",
+    "LIT-08": "NOT_EXECUTED",
+    "LIT-09": "NOT_EXECUTED",
+    "LIT-10": "NOT_EXECUTED",
+    "LIT-11": "NOT_EXECUTED",
+    "LIT-12": "NOT_EXECUTED"
+  },
+  "claims_explicitly_not_made": [
+    "Rust candidate compiled successfully",
+    "SQLite WAL durability passed",
+    "SIGKILL recovery passed",
+    "simulated power-loss recovery passed",
+    "negative-control runtime variants were detected",
+    "macOS or Windows product qualification passed",
+    "hardware, provider, model-inference, signing or deployment qualification passed"
+  ]
+}

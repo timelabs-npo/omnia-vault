@@ -16,10 +16,10 @@
 +    pub fullfsync: Option<i64>,
 +    pub busy_timeout_ms: u64,
 +}
-+diff --git a/supervisor/src/lib.rs b/supervisor/src/lib.rs
-+new file mode 100644
-+index 0000000..edabae3
-+--- /dev/null
-++++ b/supervisor/src/lib.rs
-+@@ -0,0 +1 @@
-++pub mod intact_transition;
+diff --git a/supervisor/src/lib.rs b/supervisor/src/lib.rs
+new file mode 100644
+index 0000000..edabae3
+--- /dev/null
++++ b/supervisor/src/lib.rs
+@@ -0,0 +1 @@
++pub mod intact_transition;

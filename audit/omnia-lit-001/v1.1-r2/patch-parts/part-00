@@ -1,0 +1,329 @@
+diff --git a/supervisor/src/bin/omnia_lit_001.rs b/supervisor/src/bin/omnia_lit_001.rs
+new file mode 100644
+index 0000000..46bfd3d
+--- /dev/null
++++ b/supervisor/src/bin/omnia_lit_001.rs
+@@ -0,0 +1,209 @@
++use std::collections::BTreeMap;
++use std::fs;
++use std::path::PathBuf;
++use std::process;
++use std::io::{self, Write};
++use std::thread;
++use std::time::Duration;
++
++use serde_json::{json, Value};
++use supervisor::intact_transition::*;
++
++fn die(message: impl Into<String>) -> ! {
++    let message = message.into();
++    eprintln!("{}", json!({"ok": false, "error": message}));
++    process::exit(2);
++}
++
++
++fn after_response_failpoint() {
++    if std::env::var("OMNIA_LIT_FAILPOINT").ok().as_deref() != Some("after_response_observed") {
++        return;
++    }
++    if let Ok(path) = std::env::var("OMNIA_LIT_FAILPOINT_MARKER") {
++        if let Ok(mut f) = std::fs::OpenOptions::new().create(true).write(true).truncate(true).open(path) {
++            let _ = writeln!(f, "after_response_observed");
++            let _ = f.sync_all();
++        }
++    }
++    loop { thread::sleep(Duration::from_secs(3600)); }
++}
++
++fn parse_flags(args: &[String]) -> BTreeMap<String, String> {
++    if args.len() % 2 != 0 { die("flags must be --name value pairs"); }
++    let mut out = BTreeMap::new();
++    let mut i = 0;
++    while i < args.len() {
++        let key = &args[i];
++        if !key.starts_with("--") { die(format!("expected flag, got {key}")); }
++        if out.insert(key[2..].to_string(), args[i + 1].clone()).is_some() {
++            die(format!("duplicate flag {key}"));
++        }
++        i += 2;
++    }
++    out
++}
++
++
++fn ensure_only(m: &BTreeMap<String, String>, allowed: &[&str]) {
++    for key in m.keys() {
++        if !allowed.iter().any(|allowed_key| key == allowed_key) {
++            die(format!("unexpected --{key}"));
++        }
++    }
++}
++
++fn required<'a>(m: &'a BTreeMap<String, String>, key: &str) -> &'a str {
++    m.get(key).map(String::as_str).unwrap_or_else(|| die(format!("missing --{key}")))
++}
++
++fn db_path(m: &BTreeMap<String, String>) -> PathBuf { PathBuf::from(required(m, "db")) }
++
++fn owner(m: &BTreeMap<String, String>) -> OwnerId { OwnerId::from_hex(required(m, "owner")).unwrap_or_else(|e| die(e.to_string())) }
++fn actor(m: &BTreeMap<String, String>) -> ActorId { ActorId::from_hex(required(m, "actor")).unwrap_or_else(|e| die(e.to_string())) }
++fn workspace(m: &BTreeMap<String, String>) -> WorkspaceId { WorkspaceId::from_hex(required(m, "workspace")).unwrap_or_else(|e| die(e.to_string())) }
++fn replica(m: &BTreeMap<String, String>) -> ReplicaId { ReplicaId::from_hex(required(m, "replica")).unwrap_or_else(|e| die(e.to_string())) }
++fn operation(m: &BTreeMap<String, String>) -> OperationId { OperationId::from_hex(required(m, "operation")).unwrap_or_else(|e| die(e.to_string())) }
++fn item(m: &BTreeMap<String, String>) -> ItemId { ItemId::from_hex(required(m, "item")).unwrap_or_else(|e| die(e.to_string())) }
++fn revision(m: &BTreeMap<String, String>, key: &str) -> RevisionId { RevisionId::from_hex(required(m, key)).unwrap_or_else(|e| die(e.to_string())) }
++fn manifest(m: &BTreeMap<String, String>) -> FileManifestId { FileManifestId::from_hex(required(m, "manifest")).unwrap_or_else(|e| die(e.to_string())) }
++fn generation(m: &BTreeMap<String, String>, key: &str) -> u64 {
++    let raw = required(m, key);
++    if raw.is_empty() || (raw.len() > 1 && raw.starts_with('0')) || !raw.bytes().all(|b| b.is_ascii_digit()) {
++        die(format!("--{key} must be canonical unsigned decimal"));
++    }
++    raw.parse::<u64>().unwrap_or_else(|_| die(format!("invalid --{key}")))
++}
++
++fn context(m: &BTreeMap<String, String>) -> HostContext {
++    HostContext { owner_id: owner(m), actor_id: actor(m), workspace_id: workspace(m), replica_id: replica(m) }
++}
++
++fn open_store(m: &BTreeMap<String, String>) -> StateStore {
++    StateStore::open(db_path(m), context(m)).unwrap_or_else(|e| die(e.to_string()))
++}
++
++fn head_json(h: Head) -> Value {
++    json!({"revision_id": {"type":"RevisionId","algorithm":"sha256","version":1,"hex":h.revision_id.to_hex()}, "generation":h.generation.to_string()})
++}
++
++fn publish_receipt_json(r: &PublishReceipt) -> Value {
++    json!({
++        "kind": match r.kind { PublishReceiptKind::LocalCommitted => "LOCAL_COMMITTED", PublishReceiptKind::Conflict => "CONFLICT" },
++        "operation_id": r.operation_id.to_hex(),
++        "request_digest": r.request_digest.to_hex(),
++        "owner_id": r.owner_id.to_hex(),
++        "actor_id": r.actor_id.to_hex(),
++        "workspace_id": r.workspace_id.to_hex(),
++        "replica_id": r.replica_id.to_hex(),
++        "expected_head": head_json(r.expected_head),
++        "result_head": head_json(r.result_head),
++        "item_id": r.item_id.to_hex(),
++        "file_manifest_id": {"type":"FileManifestId","algorithm":"sha256","version":1,"hex":r.file_manifest_id.to_hex()},
++        "canonical_hex": encode_hex(&r.canonical_bytes),
++        "receipt_digest": r.receipt_digest.to_hex(),
++    })
++}
++
++fn bootstrap_receipt_json(r: &BootstrapReceipt) -> Value {
++    json!({
++        "kind":"BOOTSTRAP_COMMITTED",
++        "operation_id":r.operation_id.to_hex(),
++        "request_digest":r.request_digest.to_hex(),
++        "owner_id":r.owner_id.to_hex(),
++        "actor_id":r.actor_id.to_hex(),
++        "workspace_id":r.workspace_id.to_hex(),
++        "replica_id":r.replica_id.to_hex(),
++        "genesis_head":head_json(r.genesis_head),
++        "empty_tree_id":{"type":"TreeId","algorithm":"sha256","version":1,"hex":r.empty_tree_id.to_hex()},
++        "canonical_hex":encode_hex(&r.canonical_bytes),
++        "receipt_digest":r.receipt_digest.to_hex(),
++    })
++}
++
++fn main() {
++    let args: Vec<String> = std::env::args().collect();
++    if args.len() < 2 { die("command required: manifest-id|init|publish|head|get-operation|read-item|engine-info|integrity|is-descendant"); }
++    let cmd = args[1].as_str();
++    let flags = parse_flags(&args[2..]);
++
++    let result = match cmd {
++        "manifest-id" => {
++            ensure_only(&flags, &["input"]);
++            let data = fs::read(required(&flags, "input")).unwrap_or_else(|e| die(e.to_string()));
++            let captured = capture_file(&data);
++            json!({"ok":true,"length":data.len(),"file_manifest_id":{"type":"FileManifestId","algorithm":"sha256","version":1,"hex":captured.file_manifest_id.to_hex()}})
++        }
++        "init" => {
++            ensure_only(&flags, &["db","owner","actor","workspace","replica","operation"]);
++            let mut store = open_store(&flags);
++            let receipt = store.init_workspace(InitWorkspaceV1 { schema_version: SCHEMA_VERSION, operation_id: operation(&flags) })
++                .unwrap_or_else(|e| die(e.to_string()));
++            json!({"ok":true,"receipt":bootstrap_receipt_json(&receipt)})
++        }
++        "publish" => {
++            ensure_only(&flags, &["db","owner","actor","workspace","replica","operation","item","expected-revision","expected-generation","manifest","input"]);
++            let data = fs::read(required(&flags, "input")).unwrap_or_else(|e| die(e.to_string()));
++            let mut store = open_store(&flags);
++            let req = PublishItemBytesV1 {
++                schema_version: SCHEMA_VERSION,
++                operation_id: operation(&flags),
++                item_id: item(&flags),
++                expected_head: Head { revision_id: revision(&flags, "expected-revision"), generation: generation(&flags, "expected-generation") },
++                claimed_file_manifest_id: manifest(&flags),
++                bytes: data,
++            };
++            let receipt = store.publish_item_bytes(req).unwrap_or_else(|e| die(e.to_string()));
++            json!({"ok":true,"receipt":publish_receipt_json(&receipt)})
++        }
++        "head" => {
++            ensure_only(&flags, &["db","owner","actor","workspace","replica"]);
++            let store = open_store(&flags);
++            let head = store.get_head().unwrap_or_else(|e| die(e.to_string()));
++            json!({"ok":true,"head":head_json(head)})
++        }
++        "get-operation" => {
++            ensure_only(&flags, &["db","owner","actor","workspace","replica","operation"]);
++            let store = open_store(&flags);
++            let observed = store.get_operation(operation(&flags)).unwrap_or_else(|e| die(e.to_string()));
++            match observed {
++                OperationObservation::NotRecorded => json!({"ok":true,"observation":"NOT_RECORDED"}),
++                OperationObservation::Recorded(OperationReceipt::Bootstrap(r)) => json!({"ok":true,"observation":"RECORDED","receipt":bootstrap_receipt_json(&r)}),
++                OperationObservation::Recorded(OperationReceipt::Publish(r)) => json!({"ok":true,"observation":"RECORDED","receipt":publish_receipt_json(&r)}),
++            }
++        }
++        "read-item" => {
++            ensure_only(&flags, &["db","owner","actor","workspace","replica","revision","item","out"]);
++            let store = open_store(&flags);
++            let bytes = store.read_item(revision(&flags, "revision"), item(&flags)).unwrap_or_else(|e| die(e.to_string()));
++            let output = PathBuf::from(required(&flags, "out"));
++            fs::write(&output, &bytes).unwrap_or_else(|e| die(e.to_string()));
++            json!({"ok":true,"length":bytes.len(),"content_sha256":encode_hex(&sha256(&bytes)),"output":output})
++        }
++        "engine-info" => {
++            ensure_only(&flags, &["db","owner","actor","workspace","replica"]);
++            let store = open_store(&flags);
++            let info = store.engine_info().unwrap_or_else(|e| die(e.to_string()));
++            json!({"ok":true,"contract_version":CONTRACT_VERSION,"sqlite_version":info.sqlite_version,"sqlite_source_id":info.sqlite_source_id,"vfs_name":info.vfs_name,"compile_options":info.compile_options,"journal_mode":info.journal_mode,"synchronous":info.synchronous,"foreign_keys":info.foreign_keys,"fullfsync":info.fullfsync,"busy_timeout_ms":info.busy_timeout_ms})
++        }
++        "integrity" => {
++            ensure_only(&flags, &["db","owner","actor","workspace","replica"]);
++            let store = open_store(&flags);
++            store.integrity_check().unwrap_or_else(|e| die(e.to_string()));
++            json!({"ok":true,"integrity":"OK"})
++        }
++        "is-descendant" => {
++            ensure_only(&flags, &["db","owner","actor","workspace","replica","descendant","ancestor"]);
++            let store = open_store(&flags);
++            let desc = revision(&flags, "descendant");
++            let anc = revision(&flags, "ancestor");
++            let value = store.is_descendant(desc, anc).unwrap_or_else(|e| die(e.to_string()));
++            json!({"ok":true,"is_descendant":value})
++        }
++        _ => die(format!("unknown command {cmd}")),
++    };
++
++    println!("{result}");
++    let _ = io::stdout().flush();
++    after_response_failpoint();
++}
+diff --git a/supervisor/src/intact_transition/encoding.rs b/supervisor/src/intact_transition/encoding.rs
+new file mode 100644
+index 0000000..7149e0c
+--- /dev/null
++++ b/supervisor/src/intact_transition/encoding.rs
+@@ -0,0 +1,200 @@
++use sha2::{Digest, Sha256};
++use std::collections::BTreeMap;
++
++use super::types::*;
++
++const TAG_FILE: &[u8] = b"OMNIA-FILE-V1\0";
++const TAG_TREE: &[u8] = b"OMNIA-TREE-V1\0";
++const TAG_REV: &[u8] = b"OMNIA-REV-V1\0";
++const TAG_PUBLISH: &[u8] = b"OMNIA-PUBLISH-V1\0";
++const TAG_INIT: &[u8] = b"OMNIA-INIT-V1\0";
++const TAG_RECEIPT: &[u8] = b"OMNIA-RECEIPT-V1\0";
++const TAG_INIT_RECEIPT: &[u8] = b"OMNIA-INIT-RECEIPT-V1\0";
++
++pub fn sha256(bytes: &[u8]) -> [u8; 32] {
++    let digest = Sha256::digest(bytes);
++    let mut out = [0u8; 32];
++    out.copy_from_slice(&digest);
++    out
++}
++
++fn put_u8(out: &mut Vec<u8>, value: u8) { out.push(value); }
++fn put_u32(out: &mut Vec<u8>, value: u32) { out.extend_from_slice(&value.to_be_bytes()); }
++fn put_u64(out: &mut Vec<u8>, value: u64) { out.extend_from_slice(&value.to_be_bytes()); }
++
++#[derive(Debug, Clone)]
++pub struct CapturedChunk {
++    pub object_id: ObjectId,
++    pub bytes: Vec<u8>,
++}
++
++#[derive(Debug, Clone)]
++pub struct CapturedFile {
++    pub total_length: u64,
++    pub chunks: Vec<CapturedChunk>,
++    pub canonical_manifest: Vec<u8>,
++    pub file_manifest_id: FileManifestId,
++}
++
++pub fn capture_file(bytes: &[u8]) -> CapturedFile {
++    let mut chunks = Vec::new();
++    for part in bytes.chunks(CHUNK_SIZE) {
++        chunks.push(CapturedChunk {
++            object_id: ObjectId(sha256(part)),
++            bytes: part.to_vec(),
++        });
++    }
++
++    let mut canonical = Vec::with_capacity(32 + chunks.len() * 36);
++    canonical.extend_from_slice(TAG_FILE);
++    put_u64(&mut canonical, bytes.len() as u64);
++    put_u32(&mut canonical, chunks.len() as u32);
++    for chunk in &chunks {
++        canonical.extend_from_slice(chunk.object_id.as_bytes());
++        put_u32(&mut canonical, chunk.bytes.len() as u32);
++    }
++
++    CapturedFile {
++        total_length: bytes.len() as u64,
++        chunks,
++        file_manifest_id: FileManifestId(sha256(&canonical)),
++        canonical_manifest: canonical,
++    }
++}
++
++pub fn tree_bytes(entries: &BTreeMap<ItemId, FileManifestId>) -> Vec<u8> {
++    let mut out = Vec::with_capacity(18 + entries.len() * 48);
++    out.extend_from_slice(TAG_TREE);
++    put_u32(&mut out, entries.len() as u32);
++    for (item_id, manifest_id) in entries {
++        out.extend_from_slice(item_id.as_bytes());
++        out.extend_from_slice(manifest_id.as_bytes());
++    }
++    out
++}
++
++pub fn tree_id(entries: &BTreeMap<ItemId, FileManifestId>) -> (TreeId, Vec<u8>) {
++    let bytes = tree_bytes(entries);
++    (TreeId(sha256(&bytes)), bytes)
++}
++
++pub fn revision_bytes(
++    workspace_id: WorkspaceId,
++    replica_id: ReplicaId,
++    actor_id: ActorId,
++    operation_id: OperationId,
++    generation: u64,
++    parent: Option<RevisionId>,
++    tree_id: TreeId,
++) -> Result<Vec<u8>, &'static str> {
++    if generation == 0 && parent.is_some() { return Err("genesis cannot have a parent"); }
++    if generation != 0 && parent.is_none() { return Err("non-genesis revision requires one parent"); }
++    let mut out = Vec::with_capacity(160);
++    out.extend_from_slice(TAG_REV);
++    out.extend_from_slice(workspace_id.as_bytes());
++    out.extend_from_slice(replica_id.as_bytes());
++    out.extend_from_slice(actor_id.as_bytes());
++    out.extend_from_slice(operation_id.as_bytes());
++    put_u64(&mut out, generation);
++    match parent {
++        None => put_u8(&mut out, 0),
++        Some(parent_id) => {
++            put_u8(&mut out, 1);
++            out.extend_from_slice(parent_id.as_bytes());
++        }
++    }
++    out.extend_from_slice(tree_id.as_bytes());
++    Ok(out)
++}

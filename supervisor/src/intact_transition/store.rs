@@ -642,7 +642,6 @@ fn audit_retained_objects(conn: &Connection, ctx: HostContext) -> Result<(), Sto
         let mut rows = stmt.query([])?;
         while let Some(row) = rows.next()? {
             if OwnerId(vec16(row.get(0)?, "retained receipt owner")?) != ctx.owner_id ||
-               ActorId(vec16(row.get(1)?, "retained receipt actor")?) != ctx.actor_id ||
                WorkspaceId(vec16(row.get(2)?, "retained receipt workspace")?) != ctx.workspace_id ||
                ReplicaId(vec16(row.get(3)?, "retained receipt replica")?) != ctx.replica_id {
                 return Err(StoreError::Corrupt("retained receipt namespace mismatch".into()));

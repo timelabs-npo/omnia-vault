@@ -1,0 +1,38 @@
+{
+  "include": [
+    "**/*.proto",
+    "**/*.schema.json",
+    "**/*.h",
+    "**/*.hpp",
+    "**/*.go",
+    "**/*.swift",
+    "**/*.ts",
+    "**/openapi.yaml",
+    "**/go.mod",
+    "**/Package.swift"
+  ],
+  "ignore": {
+    "customPatterns": [
+      "**/tests/**",
+      "**/logs/**",
+      "**/*.bin",
+      "**/build/**",
+      "**/vendor/**",
+      "**/node_modules/**",
+      "**/assets/**",
+      "**/*.md",
+      "**/*.txt"
+    ]
+  },
+  "output": {
+    "removeComments": false,
+    "patterns": [
+      {"pattern": "**/*.proto", "compress": false},
+      {"pattern": "**/*.schema.json", "compress": false},
+      {"pattern": "**/openapi.yaml", "compress": false},
+      {"pattern": "**/go.mod", "compress": false},
+      {"pattern": "**/Package.swift", "compress": false}
+    ]
+  },
+  "security": {"enableSecurityCheck": true}
+}

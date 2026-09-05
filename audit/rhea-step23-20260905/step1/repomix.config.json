@@ -1,0 +1,1 @@
+{"include": ["**/*.proto", "**/*.schema.json", "**/*.h", "**/*.hpp", "**/*.go", "**/*.swift", "**/*.ts", "**/openapi.yaml", "**/go.mod", "**/Package.swift"], "ignore": ["**/tests/**", "**/logs/**", "**/*.bin", "**/build/**", "**/vendor/**", "**/node_modules/**", "**/assets/**", "**/*.md", "**/*.txt"]}

@@ -65,8 +65,14 @@ open; use the final delivered executable for the updated surface.
 
 ## Publication and limits
 
-The repository includes Windows build and Windows/Linux contract CI jobs. Their
-actual run status must be read from GitHub; the workflow's presence is not a PASS.
+The first GitHub runs passed native Windows compilation and Linux verification.
+The Windows xUnit suite passed all 74 tests, but its independent provenance check
+correctly failed when Git's automatic line-ending conversion changed a pinned
+schema's bytes. Scoped `.gitattributes` now disables that conversion for pinned
+upstream fixtures. No expected hash, schema or oracle was weakened or rewritten.
+
+The repository includes Windows build and Windows/Linux contract CI jobs. The
+post-fix run status must be read from GitHub; the workflow's presence is not a PASS.
 The final delivery report records exact published commit IDs, changed files and
 remote CI status separately so this file does not claim results ahead of execution.
 

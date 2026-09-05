@@ -36,6 +36,8 @@ executor, SQLite store, alternate head, or persistent operation queue in this ap
 Companion PRs: [Omnia #2](https://github.com/timelabs-npo/omnia-vault/pull/2),
 [playbook #9](https://github.com/timelabs-npo/omnia-playbook/pull/9).
 Fixture hashes and source paths are recorded in [fixtures/provenance.json](fixtures/provenance.json).
+Scoped Git attributes preserve pinned upstream bytes even on Windows checkouts
+with automatic line-ending conversion enabled.
 Parity rules and the host snapshot are **synthetic contract fixtures**, never device evidence.
 
 ## Build and run

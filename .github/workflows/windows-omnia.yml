@@ -1,0 +1,51 @@
+name: Windows Omnia projection
+on:
+  pull_request:
+    paths:
+      - 'frontend/Omnia.Windows/**'
+      - '.github/workflows/windows-omnia.yml'
+  push:
+    branches: ['evolution/windows11-omnia-v1']
+    paths:
+      - 'frontend/Omnia.Windows/**'
+      - '.github/workflows/windows-omnia.yml'
+permissions:
+  contents: read
+jobs:
+  contracts:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: frontend/Omnia.Windows
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.3xx'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: dotnet restore tests/Omnia.Windows.Tests/Omnia.Windows.Tests.csproj --locked-mode
+      - run: dotnet test tests/Omnia.Windows.Tests/Omnia.Windows.Tests.csproj -c Release --no-restore --logger "trx;LogFileName=contracts.trx" -m:1
+      - run: python -m pip install -r tests/requirements.txt
+      - run: python tests/verify_semantics.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: contracts-${{ matrix.os }}
+          path: frontend/Omnia.Windows/tests/Omnia.Windows.Tests/TestResults/*.trx
+  native-build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: frontend/Omnia.Windows
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.3xx'
+      - run: dotnet restore src/Omnia.Windows/Omnia.Windows.csproj --locked-mode -p:Platform=x64
+      - run: dotnet build src/Omnia.Windows/Omnia.Windows.csproj -c Release -p:Platform=x64 --no-restore -m:1

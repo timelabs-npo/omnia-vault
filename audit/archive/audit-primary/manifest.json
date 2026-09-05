@@ -1,0 +1,38 @@
+{
+  "base64_chars": 74844,
+  "file_count": 19,
+  "files": [
+    {"path":"omnia-lit-001/OMNIA-LIT-001_HANDOFF.md","sha256":"7b188724d0d6d0a8ead893e7f71ac29c8a714997fc40b4419ac9dda943e97694","size":27792},
+    {"path":"omnia-lit-001/OMNIA-LIT-001_ACCEPTANCE.json","sha256":"953cff4096fca4ff4968561f855a7dcc35b7b17cda4f3e651ee24a46a4a456d2","size":15120},
+    {"path":"omnia-lit-001-v1.1-r2/validator/golden_vectors.json","sha256":"52d9010b42ce5a8563574365338f485c1f38e76b6c4b425f5681c8149906a89b","size":7592},
+    {"path":"omnia-lit-001-v1.1-r2/validator/reference_oracle.py","sha256":"d067ed3fb6be3bde396aa155ccd7da20008084d5964ecc9ec37fe5108193ca8b","size":8812},
+    {"path":"omnia-lit-001-v1.1-r2/validator/run_candidate.py","sha256":"b39dd1d6f8bcbc0a46f7e445b2a4d0487e947f5cc567344a4f310d0802de0ee6","size":19380},
+    {"path":"omnia-lit-001-v1.1-r2/validator/static_patch_review.py","sha256":"4e24d8d4d86aad1d9083cb67f88ef983d663ffa44bc73e7e4ac80e5be0d56a85","size":5290},
+    {"path":"omnia-lit-001-v1.1-r2/validator/static_patch_review.json","sha256":"cf7ff89753b3d207793dd8bbbd79ea1591ac8cc0a62bfff4dc455ffd25d1dbac","size":4683},
+    {"path":"omnia-lit-001-v1.1-r2/apply_local.sh","sha256":"7b3f5c5722d6ff73c42b15b4b08bb9250270c015ffa4b27cd71e1bfdc39a5a38","size":2802},
+    {"path":"omnia-lit-001-v1.1-r2/run_local.sh","sha256":"aa8c294845c28c6696fa355722f9550fd49bb0b0c8d01c45a6b15fe794b768c4","size":1597},
+    {"path":"omnia-lit-001-v1.1-r2/launch_local_codex.sh","sha256":"0aacf5e4e344c6e2b3f3575f702da16b8f5e8d8ffe622a2cd57e0510f2eed415","size":809},
+    {"path":"omnia-lit-001-v1.1-r2/LOCAL_CODEX_PROMPT.md","sha256":"dfb1e4e0cfcc361a0557707d1c050181ed6d684e70b3009cf9227886c95fca9b","size":3132},
+    {"path":"omnia-lit-001-v1.1-r2/README_NEXT.md","sha256":"ca1840b2f756c818b6ea21eccd9049a5da8848165c5faa3fd91a7e1f84543ec8","size":2248},
+    {"path":"omnia-lit-001-v1.1-r2/CANDIDATE_R2_REPAIR.json","sha256":"3fd0fb5290e6e3fff8592ca680303864f9617480a4ee5c376b69661e7ca4e268","size":2025},
+    {"path":"omnia-lit-001-v1.1-r2/CLOUD_STATUS.json","sha256":"0563f330e1a91631f0c37a6beb265d38224a70aeac9a3e66ce26c368c6fa9000","size":2385},
+    {"path":"omnia-lit-001-v1.1-r2/ARTIFACT_MANIFEST.json","sha256":"83242a548d1e6f26ef57c8e0e8b8daa91c6a44fa445f9ffe837a8bf592c83880","size":3409},
+    {"path":"omnia-lit-001-v1.1/CONTRACT_V1_1.md","sha256":"87260bb3182f80ddac1e95c0119f523673c597c9f1bd8fa5f2905d5079ab842b","size":2446},
+    {"path":"omnia-lit-001-v1.1/validator/golden_vectors.json","sha256":"52d9010b42ce5a8563574365338f485c1f38e76b6c4b425f5681c8149906a89b","size":7592},
+    {"path":"omnia-lit-001-v1.1/validator/reference_oracle.py","sha256":"d067ed3fb6be3bde396aa155ccd7da20008084d5964ecc9ec37fe5108193ca8b","size":8812},
+    {"path":"omnia-lit-001-v1.1/OMNIA-LIT-001-v1.1.patch","sha256":"788ec977762b1af35dc8fd05f7eed9b8e1a3b39dabfd81ce5a203ff94da0ac8a","size":83728}
+  ],
+  "gzip_bytes":56131,
+  "gzip_sha256":"896ab99289a2fd508713d71bdc101d4908d38eba20b284f4e278b133cc6d4682",
+  "tar_sha256":"79a050640a2d681bceddd7a0a11f1e502a21e87629644fb52c7c7f08b148e46a",
+  "transport":{"encoding":"base64 of gzip archive","concat_order":"part-00..part-07","parts":[
+    {"name":"part-00","size":6000,"sha256":"f1931300146af80b761cebba157419ce591d1c15b6221f34a7c972b715fe3bfe"},
+    {"name":"part-01","size":6000,"sha256":"a611650b600e8ffb523f66ae4826dd06b8967f119275be257a236cb8cdccd8bc"},
+    {"name":"part-02","size":12000,"sha256":"e5d8153b67da502dc8a7b62ecf1b5bf93b6bfa278e1bdab4087593e53bb63ce1"},
+    {"name":"part-03","size":12000,"sha256":"1ae649e07cddd2f0f8cf2188c7b36ecdbf62149c76bbf03ca601f2904864c76e"},
+    {"name":"part-04","size":12000,"sha256":"e3c8465561a43c6c102e879fd2d3484267cd4d2025826460bca124bd7914e66c"},
+    {"name":"part-05","size":12000,"sha256":"7c82ee4d9436721fe803133dde16e5a63e1dfc062ff94af5cad04142e69ff0db"},
+    {"name":"part-06","size":12000,"sha256":"10b71e9449d33b5d494cc7cac63166bff8480d23a8d556e10622716b9a0bfb8c"},
+    {"name":"part-07","size":2844,"sha256":"8571627221b1b78474e3310c4ec9829145c0c918bd10c68a1b6996477af085d5"}
+  ]}
+}

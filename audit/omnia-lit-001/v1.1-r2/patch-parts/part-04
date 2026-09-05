@@ -1,0 +1,136 @@
+cord.revision_id)));
++    }
++    match record.parent_revision_id {
++        None if record.generation != 0 => return Err(StoreError::Corrupt("non-genesis revision missing parent".into())),
++        Some(_) if record.generation == 0 => return Err(StoreError::Corrupt("genesis revision has parent".into())),
++        Some(parent_id) => {
++            let parent = load_revision_record(conn, parent_id)?.ok_or_else(|| StoreError::Corrupt("missing parent revision".into()))?;
++            if parent.workspace_id != record.workspace_id || parent.replica_id != record.replica_id {
++                return Err(StoreError::Corrupt("parent namespace mismatch".into()));
++            }
++            let expected_generation = parent.generation.checked_add(1).ok_or_else(|| StoreError::Corrupt("parent generation overflow".into()))?;
++            if expected_generation != record.generation {
++                return Err(StoreError::Corrupt("revision generation is not parent+1".into()));
++            }
++        }
++        None => {}
++    }
++    Ok(())
++}
++
++fn validate_revision_closure(conn: &Connection, ctx: HostContext, revision_id: RevisionId) -> Result<RevisionRecord, StoreError> {
++    let record = load_revision_record(conn, revision_id)?.ok_or(StoreError::RevisionNotFound)?;
++    validate_revision_record(conn, ctx, &record)?;
++    load_and_verify_tree(conn, record.tree_id, true)?;
++    Ok(record)
++}
++
++fn load_and_verify_tree(conn: &Connection, tree_id_value: TreeId, verify_manifests: bool) -> Result<BTreeMap<ItemId, FileManifestId>, StoreError> {
++    let row: Option<(i64, Vec<u8>)> = conn.query_row(
++        "SELECT item_count,canonical FROM trees WHERE tree_id=?1",
++        params![tree_id_value.as_bytes().as_slice()],
++        |r| Ok((r.get(0)?, r.get(1)?)),
++    ).optional()?;
++    let (item_count_i64, canonical) = row.ok_or_else(|| StoreError::Corrupt(format!("missing tree {tree_id_value}")))?;
++    let item_count = usize::try_from(nonnegative_u64(item_count_i64, "tree item_count")?).map_err(|_| StoreError::Corrupt("tree item_count overflow".into()))?;
++    if item_count > MAX_ITEMS_PER_ROOT { return Err(StoreError::Corrupt("tree exceeds item limit".into())); }
++
++    let mut stmt = conn.prepare("SELECT item_id,file_manifest_id FROM tree_items WHERE tree_id=?1 ORDER BY item_id")?;
++    let mut rows = stmt.query(params![tree_id_value.as_bytes().as_slice()])?;
++    let mut entries = BTreeMap::new();
++    while let Some(row) = rows.next()? {
++        let item = ItemId(vec16(row.get::<_, Vec<u8>>(0)?, "tree item")?);
++        let manifest = FileManifestId(vec32(row.get::<_, Vec<u8>>(1)?, "tree manifest")?);
++        if entries.insert(item, manifest).is_some() { return Err(StoreError::Corrupt("duplicate tree item".into())); }
++    }
++    if entries.len() != item_count { return Err(StoreError::Corrupt("tree item_count mismatch".into())); }
++    let (computed_id, computed_bytes) = tree_id(&entries);
++    if computed_id != tree_id_value || computed_bytes != canonical { return Err(StoreError::Corrupt(format!("tree {tree_id_value} canonical identity mismatch"))); }
++    if verify_manifests {
++        let mut seen = BTreeSet::new();
++        for manifest in entries.values().copied() { if seen.insert(manifest) { verify_manifest(conn, manifest, false)?; } }
++    }
++    Ok(entries)
++}
++
++fn verify_manifest(conn: &Connection, manifest_id: FileManifestId, collect: bool) -> Result<Option<Vec<u8>>, StoreError> {
++    let row: Option<(i64, i64, Vec<u8>)> = conn.query_row("SELECT total_length,chunk_count,canonical FROM file_manifests WHERE file_manifest_id=?1",params![manifest_id.as_bytes().as_slice()],|r| Ok((r.get(0)?, r.get(1)?, r.get(2)?))).optional()?;
++    let (total_i64,count_i64,stored_canonical)=row.ok_or_else(|| StoreError::Corrupt(format!("missing manifest {manifest_id}")))?;
++    let total=nonnegative_u64(total_i64,"manifest total_length")?;
++    let count=usize::try_from(nonnegative_u64(count_i64,"manifest chunk_count")?).map_err(|_|StoreError::Corrupt("chunk_count overflow".into()))?;
++    if total>MAX_INPUT_BYTES as u64 || count>(MAX_INPUT_BYTES+CHUNK_SIZE-1)/CHUNK_SIZE{return Err(StoreError::Corrupt("manifest exceeds bounded profile".into()));}
++    if total==0&&count!=0{return Err(StoreError::Corrupt("empty manifest has chunks".into()));}
++    if total>0&&count==0{return Err(StoreError::Corrupt("nonempty manifest has zero chunks".into()));}
++    let mut stmt=conn.prepare("SELECT ordinal,object_id,chunk_length FROM file_chunks WHERE file_manifest_id=?1 ORDER BY ordinal")?;
++    let mut rows=stmt.query(params![manifest_id.as_bytes().as_slice()])?;
++    let mut records:Vec<(ObjectId,usize)>=Vec::new();
++    let mut content=if collect{Some(Vec::with_capacity(total as usize))}else{None};
++    let mut expected_ordinal=0usize;
++    let mut sum=0u64;
++    while let Some(row)=rows.next()?{
++        let ordinal_i64:i64=row.get(0)?;
++        let ordinal=usize::try_from(nonnegative_u64(ordinal_i64,"chunk ordinal")?).map_err(|_|StoreError::Corrupt("chunk ordinal overflow".into()))?;
++        if ordinal!=expected_ordinal{return Err(StoreError::Corrupt("non-contiguous chunk ordinals".into()));}
++        expected_ordinal+=1;
++        let object_id=ObjectId(vec32(row.get::<_,Vec<u8>>(1)?,"object id")?);
++        let len_i64:i64=row.get(2)?;
++        let len=usize::try_from(nonnegative_u64(len_i64,"chunk length")?).map_err(|_|StoreError::Corrupt("chunk length overflow".into()))?;
++        let bytes:Vec<u8>=conn.query_row("SELECT bytes FROM chunks WHERE object_id=?1",params![object_id.as_bytes().as_slice()],|r|r.get(0)).optional()?.ok_or_else(||StoreError::Corrupt(format!("missing chunk {object_id}")))?;
++        if bytes.len()!=len||ObjectId(sha256(&bytes))!=object_id{return Err(StoreError::Corrupt(format!("chunk {object_id} identity mismatch")));}
++        if ordinal+1<count&&len!=CHUNK_SIZE{return Err(StoreError::Corrupt("nonfinal chunk has wrong length".into()));}
++        if ordinal+1==count&&(len==0||len>CHUNK_SIZE){return Err(StoreError::Corrupt("final chunk has wrong length".into()));}
++        sum=sum.checked_add(len as u64).ok_or_else(||StoreError::Corrupt("manifest length overflow".into()))?;
++        if let Some(buf)=content.as_mut(){buf.extend_from_slice(&bytes);}
++        records.push((object_id,len));
++    }
++    if records.len()!=count||sum!=total{return Err(StoreError::Corrupt("manifest count/length mismatch".into()));}
++    let mut canonical=Vec::new();
++    canonical.extend_from_slice(b"OMNIA-FILE-V1\0"); canonical.extend_from_slice(&total.to_be_bytes()); canonical.extend_from_slice(&(count as u32).to_be_bytes());
++    for (object_id,len) in records{canonical.extend_from_slice(object_id.as_bytes());canonical.extend_from_slice(&(len as u32).to_be_bytes());}
++    if canonical!=stored_canonical||FileManifestId(sha256(&canonical))!=manifest_id{return Err(StoreError::Corrupt(format!("manifest {manifest_id} canonical identity mismatch")));}
++    Ok(content)
++}
++
++fn enforce_unique_chunk_limit(conn:&Connection,captured:&CapturedFile)->Result<(),StoreError>{
++    let current_i64:i64=conn.query_row("SELECT COALESCE(SUM(byte_len),0) FROM chunks",[],|r|r.get(0))?;
++    let current=nonnegative_u64(current_i64,"unique chunk bytes")?;
++    let mut seen=BTreeSet::new(); let mut additional=0u64;
++    for chunk in &captured.chunks{
++        if !seen.insert(chunk.object_id){continue;}
++        let exists:Option<i64>=conn.query_row("SELECT byte_len FROM chunks WHERE object_id=?1",params![chunk.object_id.as_bytes().as_slice()],|r|r.get(0)).optional()?;
++        if let Some(existing_len)=exists{if nonnegative_u64(existing_len,"existing chunk length")?!=chunk.bytes.len() as u64{return Err(StoreError::Corrupt("existing chunk length disagrees with captured object".into()));}}else{additional=additional.checked_add(chunk.bytes.len() as u64).ok_or(StoreError::UniqueChunkLimit)?;}
++    }
++    if current.checked_add(additional).ok_or(StoreError::UniqueChunkLimit)?>MAX_UNIQUE_CHUNK_BYTES{return Err(StoreError::UniqueChunkLimit);}
++    Ok(())
++}
++
++fn insert_or_verify_captured_file(tx:&Transaction<'_>,captured:&CapturedFile)->Result<(),StoreError>{
++    for (chunk_index,chunk) in captured.chunks.iter().enumerate(){
++        let existing:Option<Vec<u8>>=tx.query_row("SELECT bytes FROM chunks WHERE object_id=?1",params![chunk.object_id.as_bytes().as_slice()],|r|r.get(0)).optional()?;
++        match existing{Some(bytes)=>{if bytes!=chunk.bytes||ObjectId(sha256(&bytes))!=chunk.object_id{return Err(StoreError::Corrupt(format!("existing CAS chunk {} disagrees with its ID",chunk.object_id)));}},None=>{tx.execute("INSERT INTO chunks(object_id,bytes,byte_len) VALUES(?1,?2,?3)",params![chunk.object_id.as_bytes().as_slice(),&chunk.bytes,chunk.bytes.len() as i64])?;}}
++        if chunk_index==0{test_failpoint("after_first_chunk_insert");}
++    }
++    let existing:Option<(i64,i64,Vec<u8>)>=tx.query_row("SELECT total_length,chunk_count,canonical FROM file_manifests WHERE file_manifest_id=?1",params![captured.file_manifest_id.as_bytes().as_slice()],|r|Ok((r.get(0)?,r.get(1)?,r.get(2)?))).optional()?;
++    if let Some((total,count,canonical))=existing{
++        if total!=captured.total_length as i64||count!=captured.chunks.len() as i64||canonical!=captured.canonical_manifest{return Err(StoreError::Corrupt("existing manifest row disagrees with manifest ID".into()));}
++        verify_manifest(tx,captured.file_manifest_id,false)?;return Ok(());
++    }
++    tx.execute("INSERT INTO file_manifests(file_manifest_id,total_length,chunk_count,canonical) VALUES(?1,?2,?3,?4)",params![captured.file_manifest_id.as_bytes().as_slice(),captured.total_length as i64,captured.chunks.len() as i64,&captured.canonical_manifest])?;
++    for (ordinal,chunk) in captured.chunks.iter().enumerate(){tx.execute("INSERT INTO file_chunks(file_manifest_id,ordinal,object_id,chunk_length) VALUES(?1,?2,?3,?4)",params![captured.file_manifest_id.as_bytes().as_slice(),ordinal as i64,chunk.object_id.as_bytes().as_slice(),chunk.bytes.len() as i64])?;}
++    verify_manifest(tx,captured.file_manifest_id,false)?;Ok(())
++}
++
++fn insert_or_verify_tree(tx:&Transaction<'_>,tree_id_value:TreeId,canonical:&[u8],entries:&BTreeMap<ItemId,FileManifestId>)->Result<(),StoreError>{
++    let existing:Option<(i64,Vec<u8>)>=tx.query_row("SELECT item_count,canonical FROM trees WHERE tree_id=?1",params![tree_id_value.as_bytes().as_slice()],|r|Ok((r.get(0)?,r.get(1)?))).optional()?;
++    if let Some((count,stored))=existing{if count!=entries.len() as i64||stored!=canonical{return Err(StoreError::Corrupt("existing tree row disagrees with tree ID".into()));}let loaded=load_and_verify_tree(tx,tree_id_value,false)?;if &loaded!=entries{return Err(StoreError::Corrupt("existing tree items disagree with tree ID".into()));}return Ok(());}
++    tx.execute("INSERT INTO trees(tree_id,item_count,canonical) VALUES(?1,?2,?3)",params![tree_id_value.as_bytes().as_slice(),entries.len() as i64,canonical])?;
++    for(item,manifest)in entries{tx.execute("INSERT INTO tree_items(tree_id,item_id,file_manifest_id) VALUES(?1,?2,?3)",params![tree_id_value.as_bytes().as_slice(),item.as_bytes().as_slice(),manifest.as_bytes().as_slice()])?;}
++    Ok(())
++}
++
++fn insert_or_verify_revision(tx:&Transaction<'_>,record:RevisionRecord)->Result<(),StoreError>{
++    if let Some(existing)=load_revision_record(tx,record.revision_id)?{
++        if existing.workspace_id!=record.workspace_id||existing.replica_id!=record.replica_id||existing.actor_id!=record.actor_id||existing.operation_id!=record.operation_id||existing.generation!=record.generation||existing.parent_revision_id!=record.parent_revision_id||existing.tree_id!=record.tree_id||existing.canonical!=record.canonical{return Err(StoreError::Corrupt("existing revision row disagrees with revision ID".into()));}
++        return Ok(());
++    }
++    tx.execute("INSERT INTO revisions(revision_id,workspace_id,replica_id,actor_id,operation_id,generation,parent_revision_id,tree_id,canonical) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9)",params![record.revision_id.as_bytes().as_slice(),record.workspace_id.as_bytes().as_slice(),record.replica_id.as_bytes().as_slice(),record.actor_id.as_bytes().as_slice(),record.operation_id.as_bytes().as_slice(),to_i64(record.generation)?,record.parent_revision_id.map(|v|v.as_bytes().to_vec()),record.tree_i

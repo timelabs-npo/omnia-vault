@@ -1,0 +1,25 @@
+
++pub enum OperationObservation {
++    NotRecorded,
++    Recorded(OperationReceipt),
++}
++
++#[derive(Debug, Clone, PartialEq, Eq)]
++pub struct EngineInfo {
++    pub sqlite_version: String,
++    pub sqlite_source_id: String,
++    pub vfs_name: Option<String>,
++    pub compile_options: Vec<String>,
++    pub journal_mode: String,
++    pub synchronous: i64,
++    pub foreign_keys: i64,
++    pub fullfsync: Option<i64>,
++    pub busy_timeout_ms: u64,
++}
++diff --git a/supervisor/src/lib.rs b/supervisor/src/lib.rs
++new file mode 100644
++index 0000000..edabae3
++--- /dev/null
+++++ b/supervisor/src/lib.rs
++@@ -0,0 +1 @@
+++pub mod intact_transition;

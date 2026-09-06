@@ -3,148 +3,96 @@
 </p>
 
 <h1 align="center">OMNIA VAULT</h1>
-<p align="center"><strong>THE CAVE REMEMBERS.</strong></p>
-<p align="center"><em>Bytes survive the weather. State survives the argument.</em></p>
+<p align="center"><strong>NO ONE GETS TO QUIETLY REWRITE YESTERDAY.</strong></p>
+<p align="center"><em>Identity outlives location. History deserves witnesses.</em></p>
 
 <p align="center">
-  <a href="https://blueshoes.space/rhea/">Rhea Pantheon</a> ·
+  <a href="https://blueshoes.space/rhea/">The Rhea family</a> ·
   <a href="docs/ARCHITECTURE_DEEP_DIVE.md">Architecture Deep Dive</a>
 </p>
 
----
+A cloud account should not own the only surviving version of your work. A sleeping laptop should not lose an argument merely because another machine has a newer clock.
 
-Agents crash. Clouds disappear. Laptops sleep. Network links lie. Two machines can both be absolutely certain they own “the latest version” and both be wrong.
+**Omnia Vault is storage research aimed at giving bytes an identity, revisions an ancestry, and their owner a defensible answer to “what happened?”**
 
-**Omnia Vault is an immutable-first storage experiment for making that kind of disagreement explicit instead of silently destructive.**
+**On `main` today:** two separate prototypes—a Node/SQLite event store and a Rust supervisor with its own SQLite records and POSIX move/copy + symlink operations. The immutable causal synchronization engine described below is the target. The [deep dive](docs/ARCHITECTURE_DEEP_DIVE.md) explains the distance between them.
 
-The long-term target is a content-addressed, causally ordered state substrate that can work disconnected, reconcile deliberately, and project verified revisions back into native operating-system file surfaces.
+## Two laptops. One dangerous word: “latest.”
 
-```text
-bytes
-  │
-  ▼
-content hash
-  │
-  ▼
-immutable objects ───────► causal parents
-  │                            │
-  └──────────────┬─────────────┘
-                 ▼
-             revision
-                 │
-        expected-head / generation
-                 │
-                 ▼
-          atomic publication
-                 │
-                 ▼
-        verified projection
-```
+You and a friend start with the same project. You edit a chapter on a train. Your friend revises its opening at home. Both save while disconnected. When you meet, which file wins?
 
-## Why the cave?
+A timestamp can pick a winner. It cannot explain whether one version includes the other's work.
 
-Rhea hides the infant Zeus in Crete while Cronus consumes the children he believes will replace him. The engineering translation is intentionally simple:
-
-> **What must survive cannot depend on the thing currently trying to consume it.**
-
-The Vault is the cave: a place where state is preserved by identity, ancestry, and evidence rather than by somebody's confident memory of what happened last.
-
-No, this is not an etymological claim that “Rhea literally means flow.” The Greek name `Ῥέα` has attracted that association for centuries; the project's architecture does not depend on the wordplay being philologically settled.
-
-## Target invariant
-
-A production revision should be derivable from canonical bytes and explicit parents rather than wall-clock vibes:
+The design we want keeps the relationship:
 
 ```text
-blob     = H(algorithm || length || bytes)
-tree     = H(canonical(sorted(entries)))
-revision = H(schema || author || logical-clock || parent-ids || tree-id)
+                   shared revision
+                   ┌──────┴──────┐
+                   ▼             ▼
+            your train edit   their home edit
+                   └──────┬──────┘
+                          ▼
+                    reviewed merge
+                    keeps both parents
 ```
 
-A head advances only after the candidate revision is complete and validated, and only if the expected head/generation still matches.
+*An illustration of the target revision history; current commits do not yet form this graph.*
 
-**Conflict is data. Silent overwrite is data loss.**
+The disagreement survives until someone resolves it. **Conflict is data. Silent overwrite is data loss.**
 
-## Reality receipt: what exists today
+## Topology gives history a spine
 
-This repository is **not yet a production synchronization engine**.
+Topology asks **what is connected to what**. In a revision graph, the connections are parent links: which earlier work a revision descends from. A folder name tells you where something appears. Ancestry tells you how it became what it is.
 
-The current checkout contains two independent prototype data paths:
+There is a second topology outside the history: which devices and stores can exchange objects. Your train laptop may have a complete local revision and no path to the remote store. Those are different facts. Offline work must never masquerade as a completed remote publication.
 
-- a Node/SQLite path that stores event bytes, manifests, and commits;
-- a Rust supervisor path that records stubbed files in a separate SQLite database and performs POSIX-style move/copy + symlink projection.
+Geometry lets us compare the available paths. A local disk, a nearby peer and a distant object store may hold the same bytes, while retrieval time, transfer size and cost differ radically. Choosing those measures makes “near” useful. This is a design lens, not a storage-placement optimizer already implemented here.
 
-SQLite WAL is enabled in the Node path, and event bytes receive SHA-256 content hashes. But the current implementation does **not** yet provide the complete target causal model:
+**Flow is the movement through those connections:** bytes arrive, ancestry becomes available, a candidate is checked, and a revision becomes visible. Faster transport alone cannot decide which revision deserves to become state.
 
-- commit ancestry is not a real causal DAG;
-- manifest/commit identities are not fully deterministic content-derived revision identities;
-- no atomic compare-and-swap head currently closes the publication protocol;
-- filesystem effects and the two databases are not one transaction;
-- deterministic peer reconciliation is not implemented;
-- native macOS File Provider and Windows CFAPI providers are not present in this checkout.
+That is where the hidden power sits: **whoever controls the accepted head controls what everyone else is told is current.** The target protocol makes that decision explicit, conditional and inspectable.
 
-That gap is documented deliberately in [`docs/ARCHITECTURE_DEEP_DIVE.md`](docs/ARCHITECTURE_DEEP_DIVE.md). The deep dive is the receipt; this README is not allowed to overrule it.
+## The next contract: earn the head
 
-## The design contract
+The *head* is the pointer to the accepted revision. The next storage contract needs four things to work together:
 
-### 1. Immutable before distributed
+1. **Identity:** canonical bytes determine versioned object and revision IDs. A hash identifies content; it does not establish that the content is correct or authorized.
+2. **Ancestry:** every revision names its parents. A merge preserves the alternatives and the base used to reconcile them.
+3. **Conditional publication:** advance the head only if it still matches the revision the writer expected. This compare-and-swap rule catches a concurrent writer instead of erasing their work.
+4. **Verified projection:** present files from a complete accepted revision, with a recoverable publication protocol when the process crashes.
 
-Do not synchronize mutable ambiguity faster. Establish canonical object identity first.
+The current Node store hashes event bytes with SHA-256 and enables SQLite WAL. Its manifest/commit IDs are time/random identifiers, commit parents are null, and there is no atomic head update. The supervisor's filesystem effects and the two databases do not share a transaction. Deterministic peer reconciliation remains unimplemented. See the [current data paths and target causal model](docs/ARCHITECTURE_DEEP_DIVE.md#1-current-data-paths).
 
-### 2. Causality before “latest”
+The ambition is concrete: disconnect, edit, reconnect, crash, retry—and still be able to establish **which bytes became state, from which parents, under whose authority**.
 
-A timestamp is not ancestry. A merge without a recorded base and parent set is a story, not a revision.
+## Enter through the implementation
 
-### 3. Projection is a cache
+| Surface | What you can inspect |
+|---|---|
+| [Node event store](frontend/server/core/gccmp_daemon.js) | SQLite blobs, manifests and event commits |
+| [Rust supervisor](supervisor/src/main.rs) | Metrics, scanning and prototype file stub/restore operations |
+| [Frontend](frontend/package.json) | React/Vite interface and Node proxy entry points |
+| [Native macOS shell](frontend/NebulaVaultNative/Package.swift) | Swift package executable; this is not a File Provider extension |
+| [Architecture Deep Dive](docs/ARCHITECTURE_DEEP_DIVE.md) | Current implementation, causal model and native projection contracts |
+| [Remediation plan](reports/audit/REMEDIATION.md) | The integrity, filesystem authority and reconciliation work still required |
 
-The visible filesystem should be a materialized projection of a verified revision, not the ultimate source of truth.
+Native macOS File Provider and Windows CFAPI providers are absent from this `main` snapshot. A native window and a symlink prototype do not supply their identity, hydration or publication guarantees. Open development branches are candidates, not part of this baseline.
 
-### 4. Offline is a state, not an exception
+## The family around the cave
 
-Disconnected writes may append local immutable work. They may **not** claim that a remote head advanced while nobody was connected to it.
+These are component roles and research directions, not a claim of one integrated runtime.
 
-### 5. Native OS boundaries matter
+| Project | Its part |
+|---|---|
+| [Rhea](https://github.com/timelabs-npo/rhea-project) | Proposals, coordination and staged architecture |
+| [Rheknel](https://github.com/timelabs-npo/rheknel) | Deterministic admission research |
+| [Omnia Vault](https://github.com/timelabs-npo/omnia-vault) | Identity, ancestry and state preservation |
+| [Omnia Playbook](https://github.com/timelabs-npo/omnia-playbook) | Operational invariants, checks and procedures |
+| [Blueshoes](https://github.com/timelabs-npo/Blueshoes) | Network observation and adaptive flow research |
+| [MBSD](https://github.com/timelabs-npo/mbsd) | The operating substrate and its boundaries |
 
-Future File Provider / CFAPI work must preserve provider-issued identity, no-follow path resolution, TOCTOU resistance, bounded resources, retry-safe hydration, and atomic publication semantics.
+[Explore the public family map](https://blueshoes.space/rhea/).
 
-## Where this wants to go
-
-```text
-                 OMNIA VAULT
-                     │
-       ┌─────────────┼─────────────┐
-       ▼             ▼             ▼
-   immutable       causal       durable
-     CAS           revisions     receipts
-       │             │             │
-       └─────────────┼─────────────┘
-                     ▼
-             reconciliation
-                     │
-         ┌───────────┴───────────┐
-         ▼                       ▼
-   native projection        remote object exchange
- macOS / Windows / BSD      cloud / peer / removable
-```
-
-The desired end state is boring in the best possible way: unplug a machine, reconnect it, crash it mid-write, retry the same operation, and still be able to explain **exactly which bytes became state and why**.
-
-## The Rhea family
-
-| Project | Mythic role | Engineering role |
-|---|---|---|
-| **Rhea Project** | Rhea / succession | staged architecture + authority boundaries |
-| **Rheknel** | the stone | deterministic invariant gate |
-| **Omnia Vault** | the Cretan cave | immutable-first state preservation |
-| **Omnia Playbook** | the Kouretes' dance | checks, invariants, procedures |
-| **Blueshoes** | open terrain | Flow Surgery + adaptive routing research |
-
-Explore the public family map at **https://blueshoes.space/rhea/**.
-
-## License
-
-MIT. Open research project by Timelabs NPO.
-
----
+[MIT License](LICENSE). Open research by Timelabs NPO.
 
 <p align="center"><strong>THE CAVE REMEMBERS WHAT THE NETWORK FORGOT.</strong></p>

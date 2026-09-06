@@ -54,7 +54,7 @@ dotnet build src/Omnia.Windows/Omnia.Windows.csproj -c Release -p:Platform=x64 -
 & ./src/Omnia.Windows/bin/x64/Release/net8.0-windows10.0.26100.0/win-x64/Omnia.Windows.exe
 ```
 
-Windows App SDK **2.4.0** and Windows SDK BuildTools **10.0.26100.4654** are pinned
+Windows App SDK **2.4.0**, self-contained .NET runtime **8.0.30**, and Windows SDK BuildTools **10.0.26100.4654** are pinned
 NuGet references with committed lock files. The unpackaged app is self-contained
 for .NET and Windows App SDK; keep the entire output folder together. No elevation,
 MSIX registration, production endpoint, or secret is required to open the app.
@@ -127,3 +127,23 @@ Omnia source remains under the repository MIT license. Kudu catalogs/schema are
 MIT-licensed; see [Kudu's notice](../../third_party/kudu/LICENSE).
 The copied playbook schema/fixtures are BSD-3-Clause; see
 [fixtures/playbook/LICENSE](fixtures/playbook/LICENSE).
+
+**Acknowledgements** in the app provides every recorded component's declared
+authors and original license/copyright notices. Product branding remains Omnia;
+the maintenance component uses a neutral label while crediting Advent Development
+Inc explicitly. [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and
+[attribution/components.json](attribution/components.json) identify exact source
+components, all resolved NuGet app/test dependencies, the bundled runtime,
+the schema validator's Python dependencies/interpreter, the build toolchain and CI actions.
+Full third-party notice blocks are preserved, including their individual authors.
+
+Author names/handles come from publisher metadata and copyright notices; the list
+does not invent individual contributor identities or claim that a package author
+is its sole contributor. The legacy `xunit.abstractions` package has a moved license
+URL; its declared metadata and the pinned xUnit v2 family notice are both retained.
+
+When changing dependencies, regenerate the attribution capture after restore:
+`python tools/refresh_attributions.py` using the schema validator's Python
+environment (or pass `--python-packages`). Review newly resolved authors, license
+text, source references and hashes before committing. The independent validator
+fails if any resolved NuGet dependency lacks attribution or a notice's bytes drift.

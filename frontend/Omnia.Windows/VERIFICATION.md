@@ -11,6 +11,9 @@ only, not the frozen Omnia core or filesystem effects.
 - Windows SDK Include version `10.0.26100.0` present.
 - Visual Studio Community 2022 `17.14.38` and 2026 `18.9.0` present.
 - Windows App SDK `2.4.0`, SDK BuildTools `10.0.26100.4654`, restored from NuGet.
+- Final self-contained .NET runtime is pinned at `8.0.30`, including its author and
+  license notices. The original build used the SDK's implicit `8.0.21`; the final
+  build's runtime configuration was checked to report `8.0.30`.
 - **No missing Windows SDK/tooling blocked this build.** No SDK/workload installation
   was required. An isolated Python dependency directory was used for JSON Schema validation.
 
@@ -25,7 +28,7 @@ x64 build. It is not an MSIX package or a signed production release.
 ## Automated verification
 
 `dotnet test tests/Omnia.Windows.Tests/Omnia.Windows.Tests.csproj -c Release`:
-**74 passed, 0 failed, 0 skipped**. TRX results were produced.
+**76 passed, 0 failed, 0 skipped**. TRX results were produced.
 
 The suite covers required/null/duplicate/unknown DTO fields, canonical enum decoding,
 proposal authority and escalation rejection, required false booleans, evidence/age
@@ -42,6 +45,9 @@ limits, body-read deadlines and cancellation, plus parity and Kudu exclusions.
 - companion valid/invalid authority control fixtures;
 - **41 actual C# generated proposals** against the companion schema;
 - **3-platform semantic parity** against the independently authored oracle.
+- **47 attributed components** and **69 exact notice/metadata hashes**; complete
+  coverage of resolved app/test NuGet dependencies. Embedded acknowledgement
+  resources and the maintenance author's original copyright are tested.
 
 Source search found no filesystem deletion/write/move, process launch, shell,
 registry mutation, P/Invoke or SQLite API in production app/host/contracts source.
@@ -56,10 +62,12 @@ interaction was attempted. Desktop interaction stopped immediately.
 
 Afterward the user requested Omnia-only product branding. That revision compiled;
 its XAML and UI string surfaces were statically checked to exclude upstream branding.
-The raw JSON proposal dialog was replaced with a readable review dialog.
+The raw JSON proposal dialog was replaced with a readable review dialog. A separate
+Acknowledgements view was then added for the original authors, license and copyright
+notices. It uses Omnia/neutral product labels without removing source attribution.
 
 **Not verified interactively:** final branding appearance, catalog expansion,
-proposal dialog, all module transitions, keyboard/high-DPI behavior and a live
+proposal dialog, acknowledgement selection, all module transitions, keyboard/high-DPI behavior and a live
 projection endpoint. No screenshot was published. The earlier preview may remain
 open; use the final delivered executable for the updated surface.
 

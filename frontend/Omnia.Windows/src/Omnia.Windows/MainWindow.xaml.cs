@@ -69,15 +69,33 @@ public sealed partial class MainWindow : Window
         var now = DateTimeOffset.UtcNow;
         var effective = ProjectionPresentation.WithEffectiveFreshness(snapshot, now, configuration.MaximumAge);
         var operations = selected == "Operations";
-        var module = operations ? ProductModule.SystemCleanup : Enum.Parse<ProductModule>(selected);
+        var credits = selected == "Credits";
+        var module = operations || credits ? ProductModule.SystemCleanup : Enum.Parse<ProductModule>(selected);
         (PageTitle.Text, PageDescription.Text, MutationButton.Content) = selected switch
         {
             "SystemCleanup" => ("System Cleanup", "Review maintenance candidates, their provenance and the evidence still required.", "Execute cleanup"),
             "FileCachesOrganizer" => ("File & Caches Organizer", "Inspect host observations of files and caches. Sizes and identities remain explicit when unknown.", "Organize files"),
             "AppManager" => ("App Manager", "Review application, startup and service observations supplied by the host.", "Modify applications"),
             "DataPropagator" => ("Data Propagator", "Review host propagation observations and operation receipts. Native CFAPI effects are deferred.", "Propagate data"),
+            "Credits" => ("Acknowledgements", "Omnia recognises the authors and contributors whose work makes this application possible.", ""),
             _ => ("Operations / Receipts", "Transport responses and requested actions are not proof of an executed effect.", "Execute operation")
         };
+        ReviewActions.Visibility = credits ? Visibility.Collapsed : Visibility.Visible;
+        StateBanner.Visibility = credits ? Visibility.Collapsed : Visibility.Visible;
+        CreditsPanel.Visibility = credits ? Visibility.Visible : Visibility.Collapsed;
+        if (credits)
+        {
+            Candidates.Visibility = Visibility.Collapsed;
+            Operations.Visibility = Visibility.Collapsed;
+            CatalogExclusions.Visibility = Visibility.Collapsed;
+            PageStatus.Text = "Declared component authors and original copyright notices are preserved here. The inventory also identifies build and test components, which are not shipped as application features.";
+            if (CreditsSelector.ItemsSource is null)
+            {
+                CreditsSelector.ItemsSource = AttributionCatalog.Load();
+                CreditsSelector.SelectedIndex = 0;
+            }
+            return;
+        }
         // This slice has no mutation handler, even if a replacement policy reports Allowed.
         MutationButton.IsEnabled = false;
         ToolTipService.SetToolTip(MutationButton, policy.InspectMutation(module).Reason);
@@ -98,6 +116,14 @@ public sealed partial class MainWindow : Window
             : operations
                 ? snapshot.Operations.Count == 0 ? ProjectionPresentation.EmptyMessage(snapshot, now, configuration.MaximumAge, "Operations") : "Receipt verification uses the injected host verifier."
                 : candidates.Count == 0 ? ProjectionPresentation.EmptyMessage(snapshot, now, configuration.MaximumAge, "Candidates") : "Review proposals · no storage has been reclaimed.";
+    }
+
+    private void SelectAttribution(object sender, SelectionChangedEventArgs args)
+    {
+        if (CreditsSelector.SelectedItem is not ComponentAttribution component) return;
+        CreditsAuthors.Text = component.Authors;
+        CreditsDetails.Text = $"Version: {component.Version}\n{component.Scope}\n{component.Copyright}\nLicense: {component.License}";
+        CreditsNotices.Text = AttributionCatalog.ReadNotices(component);
     }
 
     private async void PrepareProposal(object sender, RoutedEventArgs args)

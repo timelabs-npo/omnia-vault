@@ -14,6 +14,22 @@ def read(path):
 
 
 def main():
+    attribution = read(ROOT / "attribution/components.json")
+    component_ids = {entry["component_id"].lower() for entry in attribution["components"]}
+    for entry in attribution["components"]:
+        assert entry["authors"].strip(), f"Missing authors: {entry['component_id']}"
+        assert entry["license_files"], f"Missing license: {entry['component_id']}"
+        for path in entry["license_files"]:
+            assert path in attribution["files"], f"Unrecorded notice: {path}"
+    for path, evidence in attribution["files"].items():
+        assert hashlib.sha256((ROOT / path).read_bytes()).hexdigest() == evidence["sha256"], f"Notice drift: {path}"
+    for project in ("src/Omnia.Windows", "tests/Omnia.Windows.Tests"):
+        lock = read(ROOT / project / "packages.lock.json")
+        for framework in lock["dependencies"].values():
+            for name, dependency in framework.items():
+                if dependency["type"] != "Project":
+                    identity = (name + "/" + dependency["resolved"]).lower()
+                    assert identity in component_ids, f"Dependency has no attribution: {identity}"
     manifest = read(FIXTURES / "provenance.json")
     for entry in manifest["files"]:
         actual = hashlib.sha256((FIXTURES / entry["path"]).read_bytes()).hexdigest()
@@ -45,6 +61,7 @@ def main():
         actual["target_class"] = proposal["target"]["class"]
         assert actual == expected, f"Platform semantic drift: {proposal['platform']}"
     print(f"PASS: {len(manifest['files'])} pinned source hashes; 3 Kudu catalogs; companion positive/negative controls; {len(proposals)} generated proposals; 3-platform semantic parity")
+    print(f"PASS: {len(attribution['components'])} attributed components; {len(attribution['files'])} exact notice/metadata hashes; all resolved app/test NuGet dependencies covered")
 
 
 if __name__ == "__main__":

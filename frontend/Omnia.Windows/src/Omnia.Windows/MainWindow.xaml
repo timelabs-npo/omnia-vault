@@ -18,6 +18,8 @@
         <NavigationViewItem Content="Data Propagator" Tag="DataPropagator"><NavigationViewItem.Icon><SymbolIcon Symbol="Sync" /></NavigationViewItem.Icon></NavigationViewItem>
         <NavigationViewItemSeparator />
         <NavigationViewItem Content="Operations / Receipts" Tag="Operations"><NavigationViewItem.Icon><SymbolIcon Symbol="Document" /></NavigationViewItem.Icon></NavigationViewItem>
+        <NavigationViewItemSeparator />
+        <NavigationViewItem Content="Acknowledgements" Tag="Credits"><NavigationViewItem.Icon><SymbolIcon Symbol="ContactInfo" /></NavigationViewItem.Icon></NavigationViewItem>
       </NavigationView.MenuItems>
       <NavigationView.PaneFooter>
         <TextBlock Text="Review workspace&#xA;Changes are unavailable" Margin="20,16" TextWrapping="Wrap" Opacity="0.7" />
@@ -29,7 +31,7 @@
           <TextBlock x:Name="PageDescription" TextWrapping="Wrap" Opacity="0.8" />
         </StackPanel>
         <InfoBar x:Name="StateBanner" Grid.Row="1" IsOpen="True" IsClosable="False" Severity="Informational" Title="Host unavailable" />
-        <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="12">
+        <StackPanel x:Name="ReviewActions" Grid.Row="2" Orientation="Horizontal" Spacing="12">
           <Button x:Name="RefreshButton" Content="Refresh observations" Click="RefreshHost" />
           <Button x:Name="CatalogButton" Content="Review maintenance checks" Click="ShowCatalog" />
           <Button x:Name="MutationButton" Content="Execute cleanup" IsEnabled="False" />
@@ -38,6 +40,12 @@
         <ScrollViewer Grid.Row="3" HorizontalScrollBarVisibility="Disabled">
           <StackPanel Spacing="16">
             <TextBlock x:Name="PageStatus" TextWrapping="Wrap" />
+            <StackPanel x:Name="CreditsPanel" Visibility="Collapsed" Spacing="16">
+              <ComboBox x:Name="CreditsSelector" Header="Component" DisplayMemberPath="DisplayName" SelectionChanged="SelectAttribution" HorizontalAlignment="Stretch" />
+              <TextBlock x:Name="CreditsAuthors" Style="{ThemeResource SubtitleTextBlockStyle}" TextWrapping="Wrap" IsTextSelectionEnabled="True" />
+              <TextBlock x:Name="CreditsDetails" TextWrapping="Wrap" IsTextSelectionEnabled="True" />
+              <TextBox x:Name="CreditsNotices" Header="Original license and copyright notices" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" MaxHeight="420" />
+            </StackPanel>
             <Expander x:Name="CatalogExclusions" Header="Unavailable checks" HorizontalAlignment="Stretch" Visibility="Collapsed">
               <TextBlock x:Name="ExclusionText" TextWrapping="Wrap" />
             </Expander>

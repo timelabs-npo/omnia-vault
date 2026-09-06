@@ -1,3 +1,5 @@
 # Pinned upstream evidence must survive Windows core.autocrlf unchanged.
 fixtures/kudu/** -text
 fixtures/playbook/** -text
+licenses/** -text
+attribution/** -text

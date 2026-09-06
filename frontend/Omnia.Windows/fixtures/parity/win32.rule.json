@@ -1,0 +1,6 @@
+{
+  "path": "${LOCALAPPDATA}/Temp",
+  "subcategory": "Equivalent temporary data",
+  "needsAdmin": false,
+  "deepRecencyCheck": true
+}

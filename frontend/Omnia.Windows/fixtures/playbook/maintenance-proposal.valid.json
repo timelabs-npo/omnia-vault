@@ -1,0 +1,45 @@
+{
+  "schema_version": "maintenance-proposal/v1",
+  "proposal_id": "kudu-cache-001",
+  "source": {
+    "system": "AdventDevInc/kudu",
+    "revision": "92dbc52336ad9c9eb2968a180d22c72670de3b45",
+    "rule_id": "browser-cache/example"
+  },
+  "platform": {
+    "family": "darwin",
+    "adapter": "omnia-maintenance-darwin"
+  },
+  "intent": "observe_browser_cache",
+  "effect": {
+    "mode": "propose_reclaim",
+    "destructive": false,
+    "authority": "proposal_only"
+  },
+  "target": {
+    "class": "browser_profile",
+    "locator": "${HOME}/Library/Caches/example",
+    "display_name": "Example browser cache"
+  },
+  "risk": {
+    "level": "low",
+    "requires_elevation": false,
+    "user_data_risk": "unknown"
+  },
+  "preconditions": {
+    "min_age_days": 7,
+    "deep_recency_check": true,
+    "must_be_within_scope": true,
+    "requires_restore_evidence": true
+  },
+  "evidence_requirements": [
+    "source_rule_provenance",
+    "resolved_target_identity",
+    "fresh_observation",
+    "scope_validation",
+    "age_validation",
+    "recovery_or_recreate_path",
+    "independent_policy_decision",
+    "execution_receipt"
+  ]
+}

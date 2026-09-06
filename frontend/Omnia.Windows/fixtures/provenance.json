@@ -1,0 +1,64 @@
+{
+  "omnia_base": "ada2d783a3b688cb5352634d6202a45a5124273c",
+  "frozen_core_baseline": "f5995536fede02d403f0525ff9093996457efecb",
+  "playbook_revision": "35c21e2a56310870090ef927f8f7bfadfcc761aa",
+  "kudu_revision": "92dbc52336ad9c9eb2968a180d22c72670de3b45",
+  "files": [
+    {
+      "path": "playbook/maintenance-proposal.schema.json",
+      "repository": "timelabs-npo/omnia-playbook",
+      "revision": "35c21e2a56310870090ef927f8f7bfadfcc761aa",
+      "sha256": "5249eb202736dafd0258161d262d600224bf8c8752c3a469b0ce7c4f20f3113c",
+      "source_path": "schemas/maintenance-proposal.schema.json"
+    },
+    {
+      "path": "playbook/maintenance-proposal.valid.json",
+      "repository": "timelabs-npo/omnia-playbook",
+      "revision": "35c21e2a56310870090ef927f8f7bfadfcc761aa",
+      "sha256": "8a034a36eb5c5a15de007db18e09c61aa6845923b414bbc2976dba1c8945ee97",
+      "source_path": "schemas/fixtures/valid/maintenance-proposal.valid.json"
+    },
+    {
+      "path": "playbook/maintenance-proposal.authority.invalid.json",
+      "repository": "timelabs-npo/omnia-playbook",
+      "revision": "35c21e2a56310870090ef927f8f7bfadfcc761aa",
+      "sha256": "32eb05937c1eb01efccb569d8735268928298c60e910487d3dcdf8b744ba94e5",
+      "source_path": "schemas/fixtures/invalid/maintenance-proposal.authority.invalid.json"
+    },
+    {
+      "path": "kudu/rules.schema.json",
+      "repository": "AdventDevInc/kudu",
+      "revision": "92dbc52336ad9c9eb2968a180d22c72670de3b45",
+      "sha256": "548519d0ca87151a799604519e54ae10b1001c9eba47f2836a11b888db127df2",
+      "source_path": "rules/schema/rules.schema.json"
+    },
+    {
+      "path": "kudu/win32.system.json",
+      "repository": "AdventDevInc/kudu",
+      "revision": "92dbc52336ad9c9eb2968a180d22c72670de3b45",
+      "sha256": "519b8ba205f1b6c3f36effd16d05f6c3155997275ef78ccfb86054fed276292e",
+      "source_path": "rules/win32/system.json"
+    },
+    {
+      "path": "kudu/darwin.system.json",
+      "repository": "AdventDevInc/kudu",
+      "revision": "92dbc52336ad9c9eb2968a180d22c72670de3b45",
+      "sha256": "512ca8ef447ce8ea2f97e2b493005e65edd8441b7870fbeada234e7a7357791d",
+      "source_path": "rules/darwin/system.json"
+    },
+    {
+      "path": "kudu/linux.system.json",
+      "repository": "AdventDevInc/kudu",
+      "revision": "92dbc52336ad9c9eb2968a180d22c72670de3b45",
+      "sha256": "f0e89d9e3e5817af28b1c8bfee61043807c40f37029bb3e499d724bbe65695ac",
+      "source_path": "rules/linux/system.json"
+    },
+    {
+      "path": "playbook/LICENSE",
+      "repository": "timelabs-npo/omnia-playbook",
+      "revision": "35c21e2a56310870090ef927f8f7bfadfcc761aa",
+      "source_path": "LICENSE",
+      "sha256": "b417312eef87be1b82bb1bd920cec857ad66e5da3e759b1eaa70dd33f080888b"
+    }
+  ]
+}

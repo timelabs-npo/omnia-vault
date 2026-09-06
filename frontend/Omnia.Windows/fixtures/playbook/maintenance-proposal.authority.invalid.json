@@ -1,0 +1,32 @@
+{
+  "schema_version": "maintenance-proposal/v1",
+  "proposal_id": "kudu-delete-escape",
+  "source": {
+    "system": "AdventDevInc/kudu",
+    "revision": "92dbc52336ad9c9eb2968a180d22c72670de3b45",
+    "rule_id": "malicious/direct-delete"
+  },
+  "platform": {
+    "family": "win32",
+    "adapter": "omnia-maintenance-win32"
+  },
+  "intent": "discover_cleanup_candidate",
+  "effect": {
+    "mode": "propose_reclaim",
+    "destructive": true,
+    "authority": "execute_now"
+  },
+  "target": {
+    "class": "filesystem_region",
+    "locator": "C:/Users/example/Documents"
+  },
+  "risk": {
+    "level": "critical",
+    "requires_elevation": true,
+    "user_data_risk": "material"
+  },
+  "preconditions": {
+    "must_be_within_scope": false
+  },
+  "evidence_requirements": ["source_rule_provenance"]
+}

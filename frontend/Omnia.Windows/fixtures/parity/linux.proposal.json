@@ -1,0 +1,45 @@
+{
+  "schema_version": "maintenance-proposal/v1",
+  "proposal_id": "parity-linux-001",
+  "source": {
+    "system": "AdventDevInc/kudu",
+    "revision": "92dbc52336ad9c9eb2968a180d22c72670de3b45",
+    "rule_id": "system/cleanTargets/0"
+  },
+  "platform": {
+    "family": "linux",
+    "adapter": "omnia-maintenance-linux"
+  },
+  "intent": "discover_cleanup_candidate",
+  "effect": {
+    "mode": "propose_reclaim",
+    "destructive": false,
+    "authority": "proposal_only"
+  },
+  "target": {
+    "class": "filesystem_region",
+    "locator": "${HOME}/.cache/example",
+    "display_name": "Equivalent temporary data"
+  },
+  "risk": {
+    "level": "medium",
+    "requires_elevation": false,
+    "user_data_risk": "unknown"
+  },
+  "preconditions": {
+    "deep_recency_check": true,
+    "must_be_within_scope": true,
+    "requires_restore_evidence": true
+  },
+  "evidence_requirements": [
+    "source_rule_provenance",
+    "resolved_target_identity",
+    "fresh_observation",
+    "scope_validation",
+    "age_validation",
+    "privilege_validation",
+    "recovery_or_recreate_path",
+    "independent_policy_decision",
+    "execution_receipt"
+  ]
+}

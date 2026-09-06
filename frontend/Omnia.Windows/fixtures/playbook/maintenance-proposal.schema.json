@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://timelabs-npo.github.io/omnia-playbook/schemas/maintenance-proposal.schema.json",
+  "title": "MaintenanceCapabilityProposalV1",
+  "description": "Cross-platform proposal-only normal form for desktop maintenance discovery. This schema does not grant mutation authority.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "proposal_id",
+    "source",
+    "platform",
+    "intent",
+    "effect",
+    "target",
+    "risk",
+    "preconditions",
+    "evidence_requirements"
+  ],
+  "properties": {
+    "schema_version": { "const": "maintenance-proposal/v1" },
+    "proposal_id": { "type": "string", "minLength": 8 },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["system", "revision", "rule_id"],
+      "properties": {
+        "system": { "type": "string", "minLength": 2 },
+        "revision": { "type": "string", "minLength": 7 },
+        "rule_id": { "type": "string", "minLength": 1 }
+      }
+    },
+    "platform": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["family", "adapter"],
+      "properties": {
+        "family": { "enum": ["darwin", "win32", "linux"] },
+        "adapter": { "type": "string", "minLength": 3 },
+        "version_constraint": { "type": "string" }
+      }
+    },
+    "intent": {
+      "enum": [
+        "discover_cleanup_candidate",
+        "analyze_disk_usage",
+        "observe_startup_item",
+        "observe_service",
+        "observe_application_cache",
+        "observe_browser_cache"
+      ]
+    },
+    "effect": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "destructive", "authority"],
+      "properties": {
+        "mode": { "enum": ["observe", "propose_reclaim", "propose_disable", "propose_update"] },
+        "destructive": { "type": "boolean" },
+        "authority": { "const": "proposal_only" }
+      }
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["class", "locator"],
+      "properties": {
+        "class": { "enum": ["cache", "log", "temporary", "startup_item", "service", "application", "browser_profile", "filesystem_region"] },
+        "locator": { "type": "string", "minLength": 1 },
+        "display_name": { "type": "string" },
+        "item_id": { "type": "string" }
+      }
+    },
+    "risk": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["level", "requires_elevation", "user_data_risk"],
+      "properties": {
+        "level": { "enum": ["low", "medium", "high", "critical"] },
+        "requires_elevation": { "type": "boolean" },
+        "user_data_risk": { "enum": ["none_known", "possible", "material", "unknown"] }
+      }
+    },
+    "preconditions": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "min_age_days": { "type": "integer", "minimum": 0, "maximum": 3650 },
+        "deep_recency_check": { "type": "boolean" },
+        "must_be_within_scope": { "type": "boolean" },
+        "requires_restore_evidence": { "type": "boolean" }
+      }
+    },
+    "evidence_requirements": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "source_rule_provenance",
+          "resolved_target_identity",
+          "fresh_observation",
+          "scope_validation",
+          "age_validation",
+          "privilege_validation",
+          "recovery_or_recreate_path",
+          "independent_policy_decision",
+          "execution_receipt"
+        ]
+      }
+    },
+    "metadata": { "type": "object" }
+  }
+}

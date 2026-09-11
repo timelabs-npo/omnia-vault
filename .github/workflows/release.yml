@@ -88,6 +88,11 @@ jobs:
             - **Local LLM gateway**: Ollama/MLX (Llama-3, Qwen2.5-Coder) — no OpenAI tokens required
             - **Removed**: `omnia-portal` web bloat, Electron, proprietary cloud middleware
 
+            ### 🍨 Fuel For Engineer (Pistachio Gelato Manifesto)
+            > *"Свойство `имеетМороженое` у нашего разработчика строго должно быть равно `True`, иначе система упадет от нехватки глюкозы."*
+            
+            Мы экономим вам миллионы долларов на AWS. Угостите главного инженера ведерком фисташкового джелато (**pistachio gelato**) на [GitHub Sponsors](https://github.com/sponsors/timelabs-npo)! 🍨🍦
+
             ### Downloads
             | Platform | File |
             |----------|------|

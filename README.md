@@ -105,8 +105,13 @@ omnia-vault/
 | Networking | [SCION](https://scion-architecture.net) | Apache-2.0 |
 | Network simulation | [GNS3](https://gns3.com) v3.0.6 | GPL-3.0 |
 | Containerization | [Docker](https://docker.com) (WSL2) | Apache-2.0 |
-| CI/CD | [GitHub Actions](https://github.com/features/actions) | — |
-| SSH transport | OpenSSH (Ed25519) | BSD |
-| macOS bundling | Xcode Command Line Tools | Apple EULA |
-| Windows subsystem | WSL2 (Ubuntu) | Microsoft EULA |
-| Cloud integrations | iCloud / Google Cloud / Azure / Microsoft 365 | Respective TOS |
+## 🍨 Fuel For Engineer (Pistachio Gelato Manifesto)
+
+> *"Свойство `имеетМороженое` у нашего разработчика строго должно быть равно `True`, иначе система упадет от нехватки глюкозы."*
+
+Мы экономим миллионы долларов на AWS и закрытых облачных провайдерах, предоставляя суверенный, локальный и полностью независимый стек управления сетью и инфраструктурой без телеметрии и подписок.
+
+Если **Omnia-Vault** освобождает ваши серверы, оптимизирует маршруты SCION и экономит ваши нервы:
+- 🍨 **[Купите нашему главному инженеру ведёрко фисташкового джелато (pistachio gelato)](https://github.com/sponsors/timelabs-npo)** на GitHub Sponsors
+- 🍦 Поддержите разработку через [Open Collective](https://opencollective.com/timelabs-npo)
+- 🍧 `имеетМороженое = True` гарантирует отсутствие утечек памяти и 100% аптайм dual-valve SCION mesh.

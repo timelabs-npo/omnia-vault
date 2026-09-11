@@ -6,7 +6,9 @@ pub mod tray;
 pub mod llm;
 pub mod lit;
 pub mod rheknel;
+pub mod raw_socket;
 pub mod control;
+pub mod ffi;
 
 use metrics::{collect_metrics, perform_quick_clean, SystemMetricsSnapshot};
 use control::{

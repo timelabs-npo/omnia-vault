@@ -166,7 +166,20 @@ pub fn set_valve_state(valve: &str, enable: bool) -> Result<DualValveState, Stri
         }
         "mio" => {
             MIO_VALVE_ACTIVE.store(enable, Ordering::SeqCst);
-            info!("Mio valve set to: {}", enable);
+            if enable {
+                let _ = Command::new("networksetup")
+                    .args(&["-setautoproxyurl", "Wi-Fi", "http://127.0.0.1:8888/skip.pac"])
+                    .output();
+                let _ = Command::new("networksetup")
+                    .args(&["-setautoproxystate", "Wi-Fi", "on"])
+                    .output();
+                info!("Mio valve enabled: macOS system proxy routed to SCION mesh.");
+            } else {
+                let _ = Command::new("networksetup")
+                    .args(&["-setautoproxystate", "Wi-Fi", "off"])
+                    .output();
+                info!("Mio valve disabled: macOS system proxy restored to native.");
+            }
         }
         _ => return Err(format!("Unknown valve: {}", valve)),
     }

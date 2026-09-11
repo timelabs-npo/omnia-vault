@@ -1,8 +1,8 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Omnia-Vault",
-  "version": "0.2.1",
-  "identifier": "com.omniavault.app",
+  "version": "0.2.2",
+  "identifier": "com.timelabs.omnia",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:5173",

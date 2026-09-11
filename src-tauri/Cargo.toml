@@ -1,6 +1,7 @@
 [package]
+default-run = "omnia_vault"
 name = "omnia_vault"
-version = "0.2.0"
+version = "0.2.2"
 description = "A Tauri App"
 authors = ["you"]
 license = ""

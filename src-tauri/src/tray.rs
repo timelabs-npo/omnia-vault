@@ -11,16 +11,15 @@ use crate::control;
 
 pub fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     let metrics_item = MenuItem::with_id(app, "metrics_summary", "⚡ CPU: ... | RAM: ...", false, None::<&str>)?;
-    let scion_flow_item = MenuItem::with_id(app, "scion_flow", "🌐 SCION: Blended (Warm Flow)", false, None::<&str>)?;
+    let scion_flow_item = MenuItem::with_id(app, "scion_flow", "🌐 SCION: ...", false, None::<&str>)?;
     let sep1 = tauri::menu::PredefinedMenuItem::separator(app)?;
-    let open_item = MenuItem::with_id(app, "open_dashboard", "📊 SCION Topology & Mole Monitor", true, None::<&str>)?;
-    let control_pane_item = MenuItem::with_id(app, "open_control_pane", "⚙️ NDI Output (System Settings)", true, None::<&str>)?;
+    let open_item = MenuItem::with_id(app, "open_dashboard", "Open Omnia-Vault Settings", true, None::<&str>)?;
     let sep2 = tauri::menu::PredefinedMenuItem::separator(app)?;
-    let valve_mio_item = MenuItem::with_id(app, "toggle_valve_mio", "🚰 Valve A (mio.local): Active (Cold)", true, None::<&str>)?;
-    let valve_wd_item = MenuItem::with_id(app, "toggle_valve_wd", "🚰 Valve B (wd.local):  Active (Hot)", true, None::<&str>)?;
-    let clean_item = MenuItem::with_id(app, "quick_clean", "🧹 Wipe Caches (Mole)", true, None::<&str>)?;
+    let valve_mio_item = MenuItem::with_id(app, "toggle_valve_mio", "Mio Proxy (macOS PAC): ...", true, None::<&str>)?;
+    let valve_wd_item = MenuItem::with_id(app, "toggle_valve_wd", "WD Proxy: ...", true, None::<&str>)?;
+    let clean_item = MenuItem::with_id(app, "quick_clean", "Clear Caches", true, None::<&str>)?;
     let sep3 = tauri::menu::PredefinedMenuItem::separator(app)?;
-    let quit_item = MenuItem::with_id(app, "quit", "❌ Quit Omnia-Vault", true, None::<&str>)?;
+    let quit_item = MenuItem::with_id(app, "quit", "Quit Omnia-Vault", true, None::<&str>)?;
 
     let menu = Menu::with_items(
         app,
@@ -29,7 +28,6 @@ pub fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
             &scion_flow_item,
             &sep1,
             &open_item,
-            &control_pane_item,
             &sep2,
             &valve_mio_item,
             &valve_wd_item,
@@ -45,10 +43,10 @@ pub fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     let tray = TrayIconBuilder::new()
         .icon(tray_icon)
         .icon_as_template(true)
-        .title("⚡ 0% 0%")
+        .title("⚡")
         .menu(&menu)
         .show_menu_on_left_click(true)
-        .tooltip("Omnia-Vault: SCION Multi-Path & System Monitor")
+        .tooltip("Omnia-Vault: SCION Proxy")
         .on_menu_event(|app, event| {
             match event.id.as_ref() {
                 "open_dashboard" => {
@@ -56,19 +54,10 @@ pub fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
                         let _ = window.show();
                         let _ = window.unminimize();
                         let _ = window.set_focus();
-                        let _ = window.emit("navigate-tab", "monitor");
-                    }
-                }
-                "open_control_pane" => {
-                    if let Some(window) = app.get_webview_window("main") {
-                        let _ = window.show();
-                        let _ = window.unminimize();
-                        let _ = window.set_focus();
-                        let _ = window.emit("navigate-tab", "control_pane");
                     }
                 }
                 "toggle_valve_mio" => {
-                    info!("Toggling Valve A (mio.local)");
+                    info!("Toggling Mio Proxy");
                     let state = control::get_dual_valve_state();
                     let updated = control::set_valve_state("mio", !state.valve_mio);
                     if let Ok(v) = updated {
@@ -76,7 +65,7 @@ pub fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
                 "toggle_valve_wd" => {
-                    info!("Toggling Valve B (wd.local)");
+                    info!("Toggling WD Proxy");
                     let state = control::get_dual_valve_state();
                     let updated = control::set_valve_state("wd", !state.valve_wd);
                     if let Ok(v) = updated {
@@ -97,7 +86,7 @@ pub fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
         })
         .build(app)?;
 
-    // Background monitor task: update tray title ticker, tooltip and item text periodically
+    // Background monitor task
     let app_handle = app.clone();
     let tray_handle = tray.clone();
     std::thread::spawn(move || {
@@ -111,10 +100,18 @@ pub fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
             
             // Dual valve multi-path flow calculation
             let valves = control::get_dual_valve_state();
-            let _ = scion_flow_item.set_text(format!("🌐 SCION: {}", valves.flow_mode));
-            let _ = valve_mio_item.set_text(format!("🚰 Valve A (mio.local): {}", if valves.valve_mio { "Active (Cold)" } else { "Closed" }));
-            let _ = valve_wd_item.set_text(format!("🚰 Valve B (wd.local):  {}", if valves.valve_wd { "Active (Hot)" } else { "Closed" }));
-            let _ = tray_handle.set_tooltip(Some(format!("Omnia-Vault: SCION Multi-Path\n{}\nCPU: {:.0}% | RAM: {:.0}%", valves.flow_mode, snap.cpu_usage, snap.memory_percent)));
+            let flow_mode = if valves.valve_mio && valves.valve_wd {
+                "Active"
+            } else if valves.valve_mio || valves.valve_wd {
+                "Degraded"
+            } else {
+                "Inactive"
+            };
+            
+            let _ = scion_flow_item.set_text(format!("🌐 SCION: {}", flow_mode));
+            let _ = valve_mio_item.set_text(format!("Mio Proxy (macOS PAC): {}", if valves.valve_mio { "ON" } else { "OFF" }));
+            let _ = valve_wd_item.set_text(format!("WD Proxy:  {}", if valves.valve_wd { "ON" } else { "OFF" }));
+            let _ = tray_handle.set_tooltip(Some(format!("Omnia-Vault: SCION Proxy\n{}\nCPU: {:.0}% | RAM: {:.0}%", flow_mode, snap.cpu_usage, snap.memory_percent)));
 
             // Emit live updates
             let _ = app_handle.emit("system-metrics-update", &snap);

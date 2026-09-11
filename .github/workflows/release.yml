@@ -1,9 +1,18 @@
-name: Release
+name: Release Omnia-Vault
+
 on:
   push:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g. v0.2.0)'
+        required: false
+        default: 'v0.2.0'
+
+env:
+  CARGO_TERM_COLOR: always
 
 jobs:
   publish-tauri:
@@ -12,35 +21,97 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: [macos-latest, windows-latest]
+        include:
+          - platform: macos-latest
+            target: aarch64-apple-darwin
+            args: '--target aarch64-apple-darwin'
+          - platform: macos-latest
+            target: x86_64-apple-darwin
+            args: '--target x86_64-apple-darwin'
+          - platform: windows-latest
+            target: x86_64-pc-windows-msvc
+            args: ''
+
     runs-on: ${{ matrix.platform }}
+    name: Build ${{ matrix.target }}
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: setup node
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: 'npm'
 
-      - name: install Rust stable
+      - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
 
-      - name: install dependencies (ubuntu only)
-        if: matrix.platform == 'ubuntu-22.04'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev libappindicator3-dev librsvg2-dev patchelf
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
 
-      - name: install frontend dependencies
-        run: npm install
+      - name: Install frontend dependencies
+        run: npm ci
 
-      - uses: tauri-apps/tauri-action@v0
+      - name: Build and publish (macOS)
+        if: matrix.platform == 'macos-latest'
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Uncomment and add secrets for Developer ID signing + notarization:
+          # APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          # APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          # APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          # APPLE_ID: ${{ secrets.APPLE_ID }}
+          # APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          # APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        with:
+          tagName: v__VERSION__
+          releaseName: 'Omnia-Vault v__VERSION__'
+          releaseBody: |
+            ## Omnia-Vault v__VERSION__ — SCION Mesh Control Pane
+
+            ### What's New
+            - **Dual-Valve architecture**: independent Cold (mio) and Hot (wd) valves; blended multi-path when both open — no artificial "warm toggle"
+            - **Real Mole telemetry**: live Darwin sysinfo (CPU, RAM, disk, top processes) via native Rust sysinfo crate
+            - **Native macOS menu bar**: live ticker, valve toggles, wipe caches — always accessible
+            - **Remote WSL2 control** via SSH BatchMode (zero cloud, zero agents)
+            - **SCION managed daemons**: CS, BR1/BR2, godispatcher, sciond, SIG with real ports and path routing matrix
+            - **GNS3 topology**: QEMU/Docker node control from the tray
+            - **LIT-001 CAS**: 243-byte canonical publication receipts in SQLite WAL
+            - **Rheknel zero-trust gate**: fails closed on destructive mutations
+            - **Local LLM gateway**: Ollama/MLX (Llama-3, Qwen2.5-Coder) — no OpenAI tokens required
+            - **Removed**: `omnia-portal` web bloat, Electron, proprietary cloud middleware
+
+            ### Downloads
+            | Platform | File |
+            |----------|------|
+            | macOS Apple Silicon | `Omnia-Vault_aarch64.dmg` |
+            | macOS Intel | `Omnia-Vault_x64.dmg` |
+            | Windows x64 | `Omnia-Vault_x64-setup.exe` |
+
+            ### Requirements
+            - macOS 13+ (Ventura) or Windows 11
+            - For SCION mesh control: running `sciond` and `godispatcher` on target hosts
+            - For remote WSL2 control: SSH access to Windows host (BatchMode=yes)
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }}
+
+      - name: Build and publish (Windows)
+        if: matrix.platform == 'windows-latest'
+        uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: app-v__VERSION__
+          tagName: v__VERSION__
           releaseName: 'Omnia-Vault v__VERSION__'
-          releaseBody: 'See the assets to download this version and install.'
+          releaseBody: 'See macOS build for full release notes.'
           releaseDraft: true
           prerelease: false
+          args: ${{ matrix.args }}

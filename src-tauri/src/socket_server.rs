@@ -179,6 +179,38 @@ fn handle_command(cmd: CommandRequest, _app_handle: &AppHandle) -> CommandRespon
                 Err(err) => CommandResponse { status: "error".into(), message: err },
             }
         }
+        "get_tunnel_status" => {
+            let stat = crate::control::get_gns3_tunnel_status();
+            let msg = serde_json::to_string(&stat).unwrap_or_else(|_| "{}".into());
+            CommandResponse { status: "ok".into(), message: msg }
+        }
+        "restart_tunnel" => {
+            match crate::control::restart_gns3_tunnel() {
+                Ok(stat) => {
+                    let msg = serde_json::to_string(&stat).unwrap_or_else(|_| "{}".into());
+                    CommandResponse { status: "ok".into(), message: msg }
+                }
+                Err(err) => CommandResponse { status: "error".into(), message: err },
+            }
+        }
+        "toggle_tunnel" => {
+            let enable = cmd.args.get("enable").and_then(|v| v.as_bool()).unwrap_or(true);
+            match crate::control::toggle_gns3_tunnel(enable) {
+                Ok(stat) => {
+                    let msg = serde_json::to_string(&stat).unwrap_or_else(|_| "{}".into());
+                    CommandResponse { status: "ok".into(), message: msg }
+                }
+                Err(err) => CommandResponse { status: "error".into(), message: err },
+            }
+        }
+        "restart_ndi" => {
+            let format = cmd.args.get("video_format").and_then(|v| v.as_str()).unwrap_or("720p HD        ITU Rec 709").to_string();
+            let fps = cmd.args.get("frame_rate").and_then(|v| v.as_str()).unwrap_or("60").to_string();
+            match crate::control::restart_ndi_stream(format, fps) {
+                Ok(msg) => CommandResponse { status: "ok".into(), message: msg },
+                Err(err) => CommandResponse { status: "error".into(), message: err },
+            }
+        }
         _ => CommandResponse { status: "error".into(), message: format!("Unknown command: {}", cmd.cmd) },
     }
 }

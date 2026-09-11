@@ -6,8 +6,16 @@ pub mod tray;
 pub mod llm;
 pub mod lit;
 pub mod rheknel;
+pub mod control;
 
 use metrics::{collect_metrics, perform_quick_clean, SystemMetricsSnapshot};
+use control::{
+    get_gns3_tunnel_status, toggle_gns3_tunnel, restart_gns3_tunnel,
+    get_dual_valve_state, set_valve_state,
+    get_scion_managed_daemons, get_scion_paths, get_gns3_topology_nodes,
+    get_ndi_settings, restart_ndi_stream,
+    TunnelStatus, DualValveState, ScionDaemonEntity, ScionPathEntity, Gns3TopologyNode, NdiSettings,
+};
 
 #[tauri::command]
 fn get_system_metrics() -> SystemMetricsSnapshot {
@@ -17,6 +25,56 @@ fn get_system_metrics() -> SystemMetricsSnapshot {
 #[tauri::command]
 fn run_quick_clean() -> Result<String, String> {
     perform_quick_clean()
+}
+
+#[tauri::command]
+fn get_tunnel_status() -> TunnelStatus {
+    get_gns3_tunnel_status()
+}
+
+#[tauri::command]
+fn toggle_tunnel(enable: bool) -> Result<TunnelStatus, String> {
+    toggle_gns3_tunnel(enable)
+}
+
+#[tauri::command]
+fn restart_tunnel() -> Result<TunnelStatus, String> {
+    restart_gns3_tunnel()
+}
+
+#[tauri::command]
+fn get_valves() -> DualValveState {
+    get_dual_valve_state()
+}
+
+#[tauri::command]
+fn set_valve(valve: String, enable: bool) -> Result<DualValveState, String> {
+    set_valve_state(&valve, enable)
+}
+
+#[tauri::command]
+fn get_scion_daemons() -> Vec<ScionDaemonEntity> {
+    get_scion_managed_daemons()
+}
+
+#[tauri::command]
+fn get_scion_routing_paths() -> Vec<ScionPathEntity> {
+    get_scion_paths()
+}
+
+#[tauri::command]
+fn get_gns3_nodes() -> Vec<Gns3TopologyNode> {
+    get_gns3_topology_nodes()
+}
+
+#[tauri::command]
+fn get_ndi_config() -> NdiSettings {
+    get_ndi_settings()
+}
+
+#[tauri::command]
+fn restart_ndi(video_format: String, frame_rate: String) -> Result<String, String> {
+    restart_ndi_stream(video_format, frame_rate)
 }
 
 #[tauri::command]
@@ -88,6 +146,16 @@ pub fn run() {
     .invoke_handler(tauri::generate_handler![
         get_system_metrics, 
         run_quick_clean, 
+        get_tunnel_status,
+        toggle_tunnel,
+        restart_tunnel,
+        get_valves,
+        set_valve,
+        get_scion_daemons,
+        get_scion_routing_paths,
+        get_gns3_nodes,
+        get_ndi_config,
+        restart_ndi,
         query_llm, 
         get_llm_providers,
         lit_publish_text,

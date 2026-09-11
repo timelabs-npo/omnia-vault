@@ -4,6 +4,8 @@ pub mod socket_server;
 pub mod metrics;
 pub mod tray;
 pub mod llm;
+pub mod lit;
+pub mod rheknel;
 
 use metrics::{collect_metrics, perform_quick_clean, SystemMetricsSnapshot};
 
@@ -27,6 +29,55 @@ fn get_llm_providers() -> Vec<llm::LLMProviderInfo> {
     llm::list_providers()
 }
 
+#[tauri::command]
+fn lit_publish_text(
+    workspace_id: String,
+    replica_id: String,
+    item_id: String,
+    text: String,
+) -> Result<String, String> {
+    let mut ws = [0u8; 16];
+    let mut rep = [0u8; 16];
+    let mut it = [0u8; 16];
+    let ws_bytes = workspace_id.as_bytes();
+    let rep_bytes = replica_id.as_bytes();
+    let it_bytes = item_id.as_bytes();
+    ws[..ws_bytes.len().min(16)].copy_from_slice(&ws_bytes[..ws_bytes.len().min(16)]);
+    rep[..rep_bytes.len().min(16)].copy_from_slice(&rep_bytes[..rep_bytes.len().min(16)]);
+    it[..it_bytes.len().min(16)].copy_from_slice(&it_bytes[..it_bytes.len().min(16)]);
+
+    let store = &*lit::DEFAULT_LIT_STORE;
+    let (head_rev, head_gen) = store.init_workspace(&ws, &rep)?;
+
+    let mut op_id = [0u8; 16];
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+    op_id[..8].copy_from_slice(&(now as u64).to_be_bytes());
+
+    let req = lit::PublishRequest {
+        owner_id: [1u8; 16],
+        workspace_id: ws,
+        replica_id: rep,
+        operation_id: op_id,
+        expected_revision_digest: head_rev,
+        expected_generation: head_gen,
+        item_id: it,
+        data: text.into_bytes(),
+    };
+
+    let receipt = store.publish_item_bytes(req)?;
+    Ok(format!(
+        "LIT-001 Receipt: outcome={:?}, gen={}, rev={:02x?}",
+        receipt.outcome,
+        receipt.result_generation,
+        &receipt.result_revision_digest[..8]
+    ))
+}
+
+#[tauri::command]
+fn evaluate_proposal(provider: String, model: String, prompt: String, output: String) -> rheknel::AdvisoryProposal {
+    rheknel::RheknelJudge::evaluate(&provider, &model, &prompt, &output)
+}
+
 pub fn run() {
   tauri::Builder::default()
     .plugin(
@@ -34,7 +85,14 @@ pub fn run() {
         .level(log::LevelFilter::Info)
         .build(),
     )
-    .invoke_handler(tauri::generate_handler![get_system_metrics, run_quick_clean, query_llm, get_llm_providers])
+    .invoke_handler(tauri::generate_handler![
+        get_system_metrics, 
+        run_quick_clean, 
+        query_llm, 
+        get_llm_providers,
+        lit_publish_text,
+        evaluate_proposal
+    ])
     .setup(|app| {
       // Setup system tray with live monitor and quick actions
       if let Err(e) = tray::setup_tray(app.handle()) {

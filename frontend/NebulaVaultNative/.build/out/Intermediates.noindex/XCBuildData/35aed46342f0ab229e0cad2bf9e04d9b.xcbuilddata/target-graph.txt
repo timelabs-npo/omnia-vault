@@ -1,0 +1,4 @@
+Target dependency graph (2 targets)
+Target 'AllExcludingTests' in project 'Aggregate'
+➜ Explicit dependency on target 'nebulavault-cli-product' in project 'NebulaVaultNative'
+Target 'nebulavault-cli-product' in project 'NebulaVaultNative' (no dependencies)

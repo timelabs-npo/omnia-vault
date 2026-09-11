@@ -3,6 +3,7 @@ pub mod ssh_manager;
 pub mod socket_server;
 pub mod metrics;
 pub mod tray;
+pub mod llm;
 
 use metrics::{collect_metrics, perform_quick_clean, SystemMetricsSnapshot};
 
@@ -16,6 +17,16 @@ fn run_quick_clean() -> Result<String, String> {
     perform_quick_clean()
 }
 
+#[tauri::command]
+async fn query_llm(req: llm::LLMQueryRequest) -> Result<llm::LLMQueryResponse, String> {
+    llm::query_llm_provider(req).await
+}
+
+#[tauri::command]
+fn get_llm_providers() -> Vec<llm::LLMProviderInfo> {
+    llm::list_providers()
+}
+
 pub fn run() {
   tauri::Builder::default()
     .plugin(
@@ -23,7 +34,7 @@ pub fn run() {
         .level(log::LevelFilter::Info)
         .build(),
     )
-    .invoke_handler(tauri::generate_handler![get_system_metrics, run_quick_clean])
+    .invoke_handler(tauri::generate_handler![get_system_metrics, run_quick_clean, query_llm, get_llm_providers])
     .setup(|app| {
       // Setup system tray with live monitor and quick actions
       if let Err(e) = tray::setup_tray(app.handle()) {

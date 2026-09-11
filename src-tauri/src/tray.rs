@@ -13,6 +13,7 @@ pub fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     let scion_item = MenuItem::with_id(app, "scion_status", "🌐 SCION: Active (AS ff00:0:110)", false, None::<&str>)?;
     let sep1 = tauri::menu::PredefinedMenuItem::separator(app)?;
     let open_item = MenuItem::with_id(app, "open_dashboard", "📊 Open Dashboard", true, None::<&str>)?;
+    let control_pane_item = MenuItem::with_id(app, "open_control_pane", "⚙️ Control Pane (System Settings)", true, None::<&str>)?;
     let clean_item = MenuItem::with_id(app, "quick_clean", "🧹 Safe Quick Clean (Mole)", true, None::<&str>)?;
     let flip_item = MenuItem::with_id(app, "flip_backbone", "🔄 Flip Backbone (mio ⇄ wd)", true, None::<&str>)?;
     let sep2 = tauri::menu::PredefinedMenuItem::separator(app)?;
@@ -25,6 +26,7 @@ pub fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
             &scion_item,
             &sep1,
             &open_item,
+            &control_pane_item,
             &clean_item,
             &flip_item,
             &sep2,
@@ -43,6 +45,14 @@ pub fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
                         let _ = window.show();
                         let _ = window.unminimize();
                         let _ = window.set_focus();
+                    }
+                }
+                "open_control_pane" => {
+                    if let Some(window) = app.get_webview_window("main") {
+                        let _ = window.show();
+                        let _ = window.unminimize();
+                        let _ = window.set_focus();
+                        let _ = window.emit("navigate-tab", "control_pane");
                     }
                 }
                 "quick_clean" => {

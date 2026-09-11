@@ -239,3 +239,113 @@ body {
   margin-bottom: 8px;
   margin-left: 16px;
 }
+
+/* macOS System Settings Control Pane (NDI Output style) */
+.control-pane-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 24px 32px;
+  max-width: 720px;
+}
+
+.control-pane-card {
+  background-color: #28282b;
+  border: 1px solid #3a3a3e;
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin-bottom: 20px;
+}
+
+.control-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+}
+
+.control-label {
+  font-size: 13px;
+  color: #e5e5e7;
+  font-weight: 500;
+}
+
+.control-select {
+  background-color: #3e3e42;
+  color: #ffffff;
+  border: 1px solid #525257;
+  border-radius: 6px;
+  padding: 5px 12px;
+  font-size: 13px;
+  min-width: 220px;
+  outline: none;
+  cursor: pointer;
+}
+
+.control-select:focus {
+  border-color: var(--accent-color);
+}
+
+.control-help-text {
+  font-size: 12px;
+  color: #9e9ea4;
+  line-height: 1.5;
+  margin-top: 14px;
+  margin-bottom: 14px;
+}
+
+.control-actions-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+.btn-restart-control {
+  background-color: #3e3e42;
+  color: #f5f5f7;
+  border: 1px solid #525257;
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-restart-control:hover {
+  background-color: #4e4e54;
+  border-color: #686870;
+}
+
+.control-pane-footer {
+  margin-top: auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  color: #88888e;
+  padding-top: 24px;
+  border-top: 1px solid #333336;
+}
+
+.sidebar-ndi-item {
+  display: flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: 6px;
+  margin-top: 12px;
+  background-color: #0071e3 !important;
+  color: white !important;
+}
+
+.sidebar-ndi-badge {
+  background: white;
+  color: #0071e3;
+  font-weight: 900;
+  font-size: 9px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  margin-right: 8px;
+  letter-spacing: -0.5px;
+}
+

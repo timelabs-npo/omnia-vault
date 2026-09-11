@@ -1,0 +1,241 @@
+:root {
+  --bg-sidebar: #282828;
+  --bg-content: #1e1e1e;
+  --bg-list-item: #2c2c2e;
+  --border-color: #3f3f41;
+  --text-primary: #ffffff;
+  --text-secondary: #98989d;
+  --accent-color: #0a84ff;
+  --green: #32d74b;
+  --orange: #ff9f0a;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color: var(--text-primary);
+  background-color: var(--bg-content);
+  height: 100vh;
+  overflow: hidden;
+  user-select: none;
+}
+
+#root {
+  display: flex;
+  height: 100vh;
+}
+
+.sidebar {
+  width: 250px;
+  background-color: var(--bg-sidebar);
+  border-right: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+}
+
+.search-container {
+  padding: 16px;
+}
+
+.search-bar {
+  background-color: #3a3a3c;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 12px 8px 32px;
+  color: var(--text-primary);
+  width: 100%;
+  font-size: 13px;
+  outline: none;
+  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%2398989d" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>');
+  background-repeat: no-repeat;
+  background-position: 8px center;
+  background-size: 14px;
+}
+
+.profile-section {
+  display: flex;
+  align-items: center;
+  padding: 0 16px 16px;
+  gap: 12px;
+}
+
+.profile-icon {
+  width: 40px;
+  height: 40px;
+  background: linear-gradient(135deg, #ff9f0a, #ff375f);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 18px;
+  color: white;
+}
+
+.profile-name {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.profile-subtitle {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.nav-group {
+  padding: 8px;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: default;
+  font-size: 13px;
+  font-weight: 500;
+  gap: 12px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  width: 100%;
+  text-align: left;
+}
+
+.nav-item:active {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.nav-item.active {
+  background-color: var(--accent-color);
+  color: white;
+}
+
+.nav-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bg-blue { background: #0a84ff; }
+.bg-green { background: #32d74b; }
+.bg-gray { background: #8e8e93; }
+.bg-orange { background: #ff9f0a; }
+
+.main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--bg-content);
+}
+
+.header {
+  height: 52px;
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--border-color);
+  gap: 16px;
+}
+
+.header-buttons {
+  display: flex;
+  gap: 12px;
+}
+
+.chevron-btn {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+}
+
+.header-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.content-area {
+  padding: 24px;
+  flex: 1;
+  overflow-y: auto;
+  max-width: 800px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.settings-list {
+  background-color: var(--bg-list-item);
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 24px;
+}
+
+.settings-item {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-color);
+  gap: 16px;
+}
+
+.settings-item:last-child {
+  border-bottom: none;
+}
+
+.item-icon-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+}
+
+.item-content {
+  flex: 1;
+}
+
+.item-title {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.item-subtitle {
+  font-size: 12px;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.status-green { background-color: var(--green); }
+.status-gray { background-color: var(--text-secondary); }
+.status-orange { background-color: var(--orange); }
+
+.item-action {
+  color: var(--text-secondary);
+}
+
+.section-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+  margin-left: 16px;
+}

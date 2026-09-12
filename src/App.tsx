@@ -8,7 +8,9 @@ import {
   HardDrive,
   Info,
   Cpu,
-  Power
+  Power,
+  Folder,
+  Archive
 } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
@@ -86,6 +88,33 @@ interface Gns3TopologyNode {
   as_mapping: string;
 }
 
+
+interface SyncFolderPair {
+  id: string;
+  local_path: string;
+  remote_path: string;
+  direction: string;
+  conflict_handling: string;
+  pending_items: number;
+  errors: number;
+  last_completed: string;
+  is_paused: boolean;
+  exclusions: string[];
+}
+
+interface SyncStatus {
+  accounts: string[];
+  pairs: SyncFolderPair[];
+  archive_status: string;
+}
+
+interface ActiveMonitoringStatus {
+  is_active: boolean;
+  vpn_priority_lowered: boolean;
+  dead_ends_excluded: number;
+  last_scan: string;
+}
+
 export default function App() {
   const [activeTab, setActiveTab] = useState('network');
   const [cleanStatus, setCleanStatus] = useState<string | null>(null);
@@ -107,6 +136,9 @@ export default function App() {
   const tunnelReadInFlight = useRef(false);
 
   const [metrics, setMetrics] = useState<SystemMetrics | null>(null);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
+  const [monitoringStatus, setMonitoringStatus] = useState<ActiveMonitoringStatus | null>(null);
+
 
   const refreshTunnel = useCallback(async () => {
     if (tunnelReadInFlight.current) return;
@@ -129,6 +161,9 @@ export default function App() {
   useEffect(() => {
     // Initial fetch from backend
     invoke<SystemMetrics>('get_system_metrics').then(setMetrics).catch(() => {});
+    invoke<SyncStatus>('get_continuity_status').then(setSyncStatus).catch(() => {});
+    invoke<ActiveMonitoringStatus>('get_network_monitoring').then(setMonitoringStatus).catch(() => {});
+
     void refreshTunnel();
     invoke<ScionDaemonEntity[]>('get_scion_daemons').then(setScionDaemons).catch(() => {});
     invoke<ScionPathEntity[]>('get_scion_routing_paths').then(setScionPaths).catch(() => {});
@@ -148,6 +183,9 @@ export default function App() {
     // Polling fallback
     const timer = setInterval(() => {
       invoke<SystemMetrics>('get_system_metrics').then(setMetrics).catch(() => {});
+    invoke<SyncStatus>('get_continuity_status').then(setSyncStatus).catch(() => {});
+    invoke<ActiveMonitoringStatus>('get_network_monitoring').then(setMonitoringStatus).catch(() => {});
+
       void refreshTunnel();
     }, 2500);
 
@@ -229,6 +267,15 @@ export default function App() {
           </button>
 
           <button 
+            className={`nav-item ${activeTab === 'files' ? 'active' : ''}`}
+            onClick={() => setActiveTab('files')}
+          >
+            <div className="nav-icon" style={{ background: '#007aff' }}><Folder size={15} color="white" /></div>
+            <span>Files</span>
+          </button>
+
+
+          <button 
             className={`nav-item ${activeTab === 'about' ? 'active' : ''}`}
             onClick={() => setActiveTab('about')}
           >
@@ -247,6 +294,7 @@ export default function App() {
           </div>
           <div className="header-title drag-region">
             {activeTab === 'system' && 'System Telemetry'}
+            {activeTab === 'files' && 'Files & Sync'}
             {activeTab === 'network' && 'Network Connections & Routing'}
             {activeTab === 'about' && 'About Omnia-Vault'}
           </div>
@@ -443,6 +491,25 @@ export default function App() {
                     </div>
                   )}
                   <div className="valve-grid" style={{ marginTop: '16px' }}>
+
+                    <div className="valve-card" style={{ background: 'rgba(52, 199, 89, 0.05)', borderColor: 'rgba(52, 199, 89, 0.3)' }}>
+                      <div className="valve-header">
+                        <span className="valve-title">
+                          <Activity size={18} /> Active Network Leveling
+                        </span>
+                        <span className="valve-badge" style={{ background: 'var(--green)', color: 'white', border: 'none' }}>
+                          {monitoringStatus?.is_active ? 'Active' : 'Standby'}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                        Automatically manages traffic behavior by lowering VPN priority and excluding network dead ends to stabilize SCION performance.
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text-tertiary)' }}>
+                        <span>VPN Priority: {monitoringStatus?.vpn_priority_lowered ? 'Lowered' : 'Normal'}</span>
+                        <span>Dead ends excluded: {monitoringStatus?.dead_ends_excluded || 0}</span>
+                      </div>
+                    </div>
+
                     <div className="valve-card closed">
                       <div className="valve-header">
                         <span className="valve-title">
@@ -621,6 +688,84 @@ export default function App() {
                   </table>
                 </div>
               )}
+            </div>
+          )}
+
+          
+          {/* TAB: FILES */}
+          {activeTab === 'files' && syncStatus && (
+            <div>
+              <div className="settings-list" style={{ marginTop: '16px' }}>
+                <div className="settings-item">
+                  <div className="item-icon-container bg-blue">
+                    <Server size={18} color="white" />
+                  </div>
+                  <div className="item-content">
+                    <div className="item-title">Connected Accounts & Locations</div>
+                    <div className="item-subtitle">
+                      {syncStatus.accounts.join(', ')}
+                    </div>
+                  </div>
+                </div>
+                <div className="settings-item">
+                  <div className="item-icon-container bg-green">
+                    <Archive size={18} color="white" />
+                  </div>
+                  <div className="item-content">
+                    <div className="item-title">Archive Status</div>
+                    <div className="item-subtitle">
+                      {syncStatus.archive_status}
+                    </div>
+                  </div>
+                  <button style={{ background: '#38383e', border: 'none', color: 'white', borderRadius: '6px', padding: '5px 12px', fontSize: '12px', cursor: 'pointer' }}>
+                    Restore...
+                  </button>
+                </div>
+              </div>
+
+              <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '8px', marginLeft: '4px', marginTop: '16px' }}>
+                SYNC FOLDERS
+              </div>
+              
+              <div className="settings-list">
+                {syncStatus.pairs.map(pair => (
+                  <div key={pair.id} className="settings-item" style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+                      <div className="item-content">
+                        <div className="item-title" style={{ fontFamily: 'monospace' }}>{pair.local_path}</div>
+                        <div className="item-subtitle" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <span>⇄</span>
+                            <span style={{ fontFamily: 'monospace' }}>{pair.remote_path}</span>
+                        </div>
+                      </div>
+                      <div>
+                        <span style={{ fontSize: '10px', padding: '3px 8px', borderRadius: '12px', background: pair.is_paused ? 'var(--orange)' : 'var(--green)', color: 'white', fontWeight: 600 }}>
+                          {pair.is_paused ? 'PAUSED' : 'ACTIVE'}
+                        </span>
+                      </div>
+                    </div>
+                    
+                    <div style={{ display: 'flex', gap: '16px', fontSize: '11px', color: 'var(--text-tertiary)', marginTop: '12px', width: '100%', background: 'rgba(0,0,0,0.2)', padding: '10px', borderRadius: '6px' }}>
+                        <div><strong>Direction:</strong> {pair.direction}</div>
+                        <div><strong>Conflict:</strong> {pair.conflict_handling}</div>
+                        <div><strong>Pending:</strong> {pair.pending_items} files</div>
+                        {pair.errors > 0 && <div style={{ color: 'var(--orange)' }}><strong>Errors:</strong> {pair.errors}</div>}
+                        <div><strong>Last sync:</strong> {pair.last_completed}</div>
+                    </div>
+                    {pair.exclusions.length > 0 && (
+                        <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginTop: '8px' }}>
+                          Exclusions: {pair.exclusions.join(', ')}
+                        </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+              
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '16px' }}>
+                <button style={{ background: '#007aff', border: 'none', color: 'white', borderRadius: '6px', padding: '8px 16px', fontSize: '13px', cursor: 'pointer', fontWeight: 500 }}>
+                  + Add Folder Pair
+                </button>
+              </div>
             </div>
           )}
 

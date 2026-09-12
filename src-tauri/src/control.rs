@@ -76,6 +76,35 @@ pub struct NdiSettings {
     pub last_restart_timestamp: u64,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct SyncFolderPair {
+    pub id: String,
+    pub local_path: String,
+    pub remote_path: String,
+    pub direction: String, // "two-way", "up", "down"
+    pub conflict_handling: String, // "keep-both", "overwrite-local", "overwrite-remote"
+    pub pending_items: u32,
+    pub errors: u32,
+    pub last_completed: String,
+    pub is_paused: bool,
+    pub exclusions: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct SyncStatus {
+    pub accounts: Vec<String>,
+    pub pairs: Vec<SyncFolderPair>,
+    pub archive_status: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct ActiveMonitoringStatus {
+    pub is_active: bool,
+    pub vpn_priority_lowered: bool,
+    pub dead_ends_excluded: u32,
+    pub last_scan: String,
+}
+
 pub fn get_gns3_tunnel_status() -> TunnelStatus {
     let home = std::env::var("HOME").unwrap_or_else(|_| "/Users/sa".to_string());
     let plist_path = format!("{}/Library/LaunchAgents/com.omniavault.gns3tunnel.plist", home);
@@ -289,4 +318,39 @@ pub fn restart_ndi_stream(format: String, frame_rate: String) -> Result<String, 
         "NDI Output restarted successfully. Broadcasting at {} fps ({}).",
         frame_rate, format
     ))
+}
+
+pub fn get_sync_status() -> SyncStatus {
+    SyncStatus {
+        accounts: vec!["Pro Apple Cloud".to_string(), "Local Storage".to_string()],
+        pairs: vec![
+            SyncFolderPair {
+                id: "pair-1".to_string(),
+                local_path: "/Users/sa/Documents".to_string(),
+                remote_path: "Pro Apple Cloud/Documents".to_string(),
+                direction: "two-way".to_string(),
+                conflict_handling: "keep-both".to_string(),
+                pending_items: 0,
+                errors: 0,
+                last_completed: "Just now".to_string(),
+                is_paused: false,
+                exclusions: vec!["*.tmp".to_string(), "node_modules".to_string()],
+            }
+        ],
+        archive_status: "Healthy".to_string(),
+    }
+}
+
+pub fn get_monitoring_status() -> ActiveMonitoringStatus {
+    ActiveMonitoringStatus {
+        is_active: true,
+        vpn_priority_lowered: true,
+        dead_ends_excluded: 2,
+        last_scan: "Just now".to_string(),
+    }
+}
+
+pub fn set_monitoring_priority(_vpn_priority_lowered: bool) -> Result<(), String> {
+    // Mock changing network priority
+    Ok(())
 }

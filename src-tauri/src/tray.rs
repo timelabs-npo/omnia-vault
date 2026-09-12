@@ -8,8 +8,8 @@ use crate::{metrics, control};
 
 pub fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     let state = MenuItem::with_id(app, "connection_status", "Connection not verified", false, None::<&str>)?;
-    let checks = MenuItem::with_id(app, "connection_checks", "Check connection", true, None::<&str>)?;
-    let open = MenuItem::with_id(app, "open_dashboard", "Open app", true, None::<&str>)?;
+    let checks = MenuItem::with_id(app, "connection_checks", "Open System Settings", true, None::<&str>)?;
+    let open = MenuItem::with_id(app, "open_dashboard", "Open Dashboard", true, None::<&str>)?;
     let separator = tauri::menu::PredefinedMenuItem::separator(app)?;
     let quit = MenuItem::with_id(app, "quit", "Quit Omnia-Vault", true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&state, &checks, &open, &separator, &quit])?;

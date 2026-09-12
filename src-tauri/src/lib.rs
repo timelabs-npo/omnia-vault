@@ -16,7 +16,9 @@ use control::{
     get_dual_valve_state, set_valve_state,
     get_scion_managed_daemons, get_scion_paths, get_gns3_topology_nodes,
     get_ndi_settings, restart_ndi_stream,
+    get_sync_status, get_monitoring_status, set_monitoring_priority,
     TunnelStatus, DualValveState, ScionDaemonEntity, ScionPathEntity, Gns3TopologyNode, NdiSettings,
+    SyncStatus, ActiveMonitoringStatus,
 };
 
 #[tauri::command]
@@ -83,6 +85,22 @@ fn get_ndi_config() -> NdiSettings {
 fn restart_ndi(video_format: String, frame_rate: String) -> Result<String, String> {
     restart_ndi_stream(video_format, frame_rate)
 }
+
+#[tauri::command]
+fn get_continuity_status() -> SyncStatus {
+    get_sync_status()
+}
+
+#[tauri::command]
+fn get_network_monitoring() -> ActiveMonitoringStatus {
+    get_monitoring_status()
+}
+
+#[tauri::command]
+fn set_network_priority(lower_vpn: bool) -> Result<(), String> {
+    set_monitoring_priority(lower_vpn)
+}
+
 
 #[tauri::command]
 async fn query_llm(req: llm::LLMQueryRequest) -> Result<llm::LLMQueryResponse, String> {
@@ -164,6 +182,9 @@ pub fn run() {
         get_gns3_nodes,
         get_ndi_config,
         restart_ndi,
+        get_continuity_status,
+        get_network_monitoring,
+        set_network_priority,
         query_llm, 
         get_llm_providers,
         lit_publish_text,

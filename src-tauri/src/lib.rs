@@ -35,6 +35,11 @@ fn get_tunnel_status() -> TunnelStatus {
 }
 
 #[tauri::command]
+fn open_connection_checks() -> Result<(), String> {
+    control::open_connection_checks()
+}
+
+#[tauri::command]
 fn toggle_tunnel(enable: bool) -> Result<TunnelStatus, String> {
     toggle_gns3_tunnel(enable)
 }
@@ -149,6 +154,7 @@ pub fn run() {
         get_system_metrics, 
         run_quick_clean, 
         get_tunnel_status,
+        open_connection_checks,
         toggle_tunnel,
         restart_tunnel,
         get_valves,

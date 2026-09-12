@@ -122,45 +122,10 @@ fn handle_command(cmd: CommandRequest, _app_handle: &AppHandle) -> CommandRespon
                 Err(err) => CommandResponse { status: "error".into(), message: err },
             }
         }
-        "get_llm_providers" => {
-            let providers = crate::llm::list_providers();
-            let msg = serde_json::to_string(&providers).unwrap_or_else(|_| "[]".into());
+        "get_llm_providers" | "query_llm" | "prepare_and_reboot" => {
             CommandResponse {
-                status: "ok".into(),
-                message: msg,
-            }
-        }
-        "query_llm" => {
-            let provider = cmd.args.get("provider").and_then(|v| v.as_str()).unwrap_or("openrouter").to_string();
-            let model = cmd.args.get("model").and_then(|v| v.as_str()).map(|s| s.to_string());
-            let prompt = cmd.args.get("prompt").and_then(|v| v.as_str()).unwrap_or("Hello from socket").to_string();
-            let api_key = cmd.args.get("api_key").and_then(|v| v.as_str()).map(|s| s.to_string());
-            
-            let req = crate::llm::LLMQueryRequest {
-                provider,
-                model,
-                prompt,
-                api_key,
-            };
-            
-            // Execute synchronous block_in_place for async call
-            let res = tokio::task::block_in_place(|| {
-                tokio::runtime::Handle::current().block_on(crate::llm::query_llm_provider(req))
-            });
-            
-            match res {
-                Ok(resp) => {
-                    let msg = serde_json::to_string(&resp).unwrap_or_else(|_| "{}".into());
-                    CommandResponse { status: "ok".into(), message: msg }
-                },
-                Err(err) => CommandResponse { status: "error".into(), message: err },
-            }
-        }
-        "prepare_and_reboot" => {
-            let is_mac = cfg!(target_os = "macos");
-            match ssh_manager::prepare_and_reboot(is_mac) {
-                Ok(msg) => CommandResponse { status: "ok".into(), message: msg },
-                Err(err) => CommandResponse { status: "error".into(), message: err },
+                status: "error".into(),
+                message: "This command has been disabled for security reasons".into(),
             }
         }
         "stop_ssh_tunnel" => {

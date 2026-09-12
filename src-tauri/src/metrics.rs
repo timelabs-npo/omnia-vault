@@ -41,8 +41,6 @@ pub struct SystemMetricsSnapshot {
     pub cleanable_estimate_mb: u64,
     pub network_rx_kb: u64,
     pub network_tx_kb: u64,
-    pub health_score: u8,
-    pub health_status: String,
     pub top_processes: Vec<ProcessInfo>,
     pub uptime_secs: u64,
     pub os_name: String,
@@ -97,38 +95,6 @@ pub fn collect_metrics() -> SystemMetricsSnapshot {
     // Cleanable estimate (Mole scan targets: user Caches, logs, etc.)
     let cleanable_mb = estimate_cleanable_cache();
 
-    // Health Score calculation (0 - 100)
-    let mut score = 100i32;
-    if cpu_usage > 85.0 {
-        score -= 25;
-    } else if cpu_usage > 60.0 {
-        score -= 10;
-    }
-
-    if memory_percent > 90.0 {
-        score -= 30;
-    } else if memory_percent > 75.0 {
-        score -= 15;
-    }
-
-    let primary_disk_pct = disks.first().map(|d| d.usage_percent).unwrap_or(0.0);
-    if primary_disk_pct > 90.0 {
-        score -= 30;
-    } else if primary_disk_pct > 80.0 {
-        score -= 15;
-    }
-
-    let final_score = score.max(0).min(100) as u8;
-    let health_status = if final_score >= 85 {
-        "Optimal".to_string()
-    } else if final_score >= 65 {
-        "Good".to_string()
-    } else if final_score >= 45 {
-        "Warning".to_string()
-    } else {
-        "Critical".to_string()
-    };
-
     // Processes & Uptime
     sys.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
     let mut procs: Vec<ProcessInfo> = sys.processes().iter().map(|(pid, p)| {
@@ -157,8 +123,6 @@ pub fn collect_metrics() -> SystemMetricsSnapshot {
         cleanable_estimate_mb: cleanable_mb,
         network_rx_kb: rx_bytes / 1024,
         network_tx_kb: tx_bytes / 1024,
-        health_score: final_score,
-        health_status,
         top_processes: procs,
         uptime_secs,
         os_name,
@@ -190,13 +154,13 @@ pub fn estimate_cleanable_cache() -> u64 {
             }
         }
     }
-    // Return MB
-    (cleanable_bytes / 1024 / 1024).max(12)
+    (cleanable_bytes / 1024 / 1024)
 }
 
 pub fn perform_quick_clean() -> Result<String, String> {
     let mut total_bytes_freed = 0u64;
     let mut cleaned_buckets = 0;
+    let mut errors = 0;
 
     if let Ok(home) = std::env::var("HOME") {
         let targets = [
@@ -210,12 +174,14 @@ pub fn perform_quick_clean() -> Result<String, String> {
                 if let Ok(entries) = std::fs::read_dir(p) {
                     for entry in entries.flatten() {
                         if let Ok(meta) = entry.metadata() {
-                            total_bytes_freed += meta.len();
+                            if std::fs::remove_file(entry.path()).is_ok() {
+                                total_bytes_freed += meta.len();
+                            } else {
+                                errors += 1;
+                            }
                         }
                     }
                 }
-                let _ = std::fs::remove_dir_all(p);
-                let _ = std::fs::create_dir_all(p);
                 cleaned_buckets += 1;
             }
         }
@@ -227,8 +193,11 @@ pub fn perform_quick_clean() -> Result<String, String> {
                 let name = entry.file_name().to_string_lossy().to_string();
                 if (name.starts_with("omnia_vault") && name.ends_with(".tmp")) || name.ends_with(".scion.tmp") {
                     if let Ok(meta) = entry.metadata() {
-                        total_bytes_freed += meta.len();
-                        let _ = std::fs::remove_file(entry.path());
+                        if std::fs::remove_file(entry.path()).is_ok() {
+                            total_bytes_freed += meta.len();
+                        } else {
+                            errors += 1;
+                        }
                     }
                 }
             }
@@ -236,10 +205,14 @@ pub fn perform_quick_clean() -> Result<String, String> {
     }
 
     let freed_mb = (total_bytes_freed as f64) / 1024.0 / 1024.0;
+    if errors > 0 {
+        return Err(format!("Cleaned {:.1} MB, but encountered {} errors.", freed_mb, errors));
+    }
+    
     if freed_mb > 0.05 {
-        Ok(format!("Safe Quick Clean completed: purged {:.1} MB across {} telemetry buckets", freed_mb, cleaned_buckets.max(1)))
+        Ok(format!("Deleted {:.1} MB across {} locations", freed_mb, cleaned_buckets.max(1)))
     } else {
-        Ok("Safe Quick Clean completed: all telemetry caches verified clean (0 B pending)".to_string())
+        Ok("All app caches are clean (0 B deleted)".to_string())
     }
 }
 
@@ -252,6 +225,5 @@ mod tests {
         let metrics = collect_metrics();
         assert!(metrics.cpu_cores > 0);
         assert!(metrics.memory_total_mb > 0);
-        assert!(metrics.health_score <= 100);
     }
 }

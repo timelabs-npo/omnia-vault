@@ -1,8 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   Wifi, 
-  Globe, 
-  ShieldAlert, 
   ChevronRight, 
   ChevronLeft,
   Server,
@@ -10,8 +8,6 @@ import {
   HardDrive,
   Info,
   Cpu,
-  Bot,
-  Send,
   Power
 } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
@@ -61,17 +57,6 @@ interface TunnelStatus {
   plist_path: string;
 }
 
-interface DualValveState {
-  valve_mio: boolean;
-  valve_wd: boolean;
-  flow_mode: string;
-  flow_temperature: string;
-  total_flow_kb: number;
-  active_path_count: number;
-  mio_latency_ms: number;
-  wd_latency_ms: number;
-}
-
 interface ScionDaemonEntity {
   id: string;
   name: string;
@@ -104,55 +89,47 @@ interface Gns3TopologyNode {
 export default function App() {
   const [activeTab, setActiveTab] = useState('network');
   const [cleanStatus, setCleanStatus] = useState<string | null>(null);
-
-  // Status message states
-  const [tunnelActionMsg, setTunnelActionMsg] = useState<string | null>(null);
-
-  // Dual Valve / Proxy State
-  const [valves, setValves] = useState<DualValveState>({
-    valve_mio: false,
-    valve_wd: false,
-    flow_mode: 'Unavailable',
-    flow_temperature: 'Unavailable',
-    total_flow_kb: 0,
-    active_path_count: 0,
-    mio_latency_ms: 0,
-    wd_latency_ms: 0
-  });
+  const [isOpeningChecks, setIsOpeningChecks] = useState(false);
+  const [connectionChecksError, setConnectionChecksError] = useState<string | null>(null);
 
   // SCION Subtabs & Entities
   const [scionSubTab, setScionSubTab] = useState<'valves' | 'daemons' | 'paths' | 'gns3'>('valves');
-  const [selectedAsFilter, setSelectedAsFilter] = useState('all');
 
   const [scionDaemons, setScionDaemons] = useState<ScionDaemonEntity[]>([]);
   const [scionPaths, setScionPaths] = useState<ScionPathEntity[]>([]);
   const [gnsNodes, setGnsNodes] = useState<Gns3TopologyNode[]>([]);
 
-  // Tunnel State
-  const [tunnel, setTunnel] = useState<TunnelStatus>({
-    is_running: false,
-    pid: null,
-    port_responding: false,
-    label: 'Unknown',
-    target_host: 'Unknown',
-    plist_path: ''
-  });
-
-  // External LLM Models State
-  const [llmProvider, setLlmProvider] = useState('openrouter');
-  const [llmModel, setLlmModel] = useState('deepseek/deepseek-r1');
-  const [llmApiKey, setLlmApiKey] = useState('');
-  const [llmPrompt, setLlmPrompt] = useState('');
-  const [llmResponse, setLlmResponse] = useState<string | null>(null);
-  const [llmLoading, setLlmLoading] = useState(false);
+  // These observations describe the legacy GNS3 helper, not application routing.
+  const [tunnel, setTunnel] = useState<TunnelStatus | null>(null);
+  const [tunnelCheckedAt, setTunnelCheckedAt] = useState<Date | null>(null);
+  const [tunnelError, setTunnelError] = useState<string | null>(null);
+  const [isRefreshingTunnel, setIsRefreshingTunnel] = useState(false);
+  const tunnelReadInFlight = useRef(false);
 
   const [metrics, setMetrics] = useState<SystemMetrics | null>(null);
+
+  const refreshTunnel = useCallback(async () => {
+    if (tunnelReadInFlight.current) return;
+    tunnelReadInFlight.current = true;
+    setIsRefreshingTunnel(true);
+    try {
+      const observation = await invoke<TunnelStatus>('get_tunnel_status');
+      setTunnel(observation);
+      setTunnelCheckedAt(new Date());
+      setTunnelError(null);
+    } catch {
+      setTunnel(null);
+      setTunnelError('Helper status could not be read. Connection status remains unverified.');
+    } finally {
+      tunnelReadInFlight.current = false;
+      setIsRefreshingTunnel(false);
+    }
+  }, []);
 
   useEffect(() => {
     // Initial fetch from backend
     invoke<SystemMetrics>('get_system_metrics').then(setMetrics).catch(() => {});
-    invoke<TunnelStatus>('get_tunnel_status').then(setTunnel).catch(() => {});
-    invoke<DualValveState>('get_valves').then(setValves).catch(() => {});
+    void refreshTunnel();
     invoke<ScionDaemonEntity[]>('get_scion_daemons').then(setScionDaemons).catch(() => {});
     invoke<ScionPathEntity[]>('get_scion_routing_paths').then(setScionPaths).catch(() => {});
     invoke<Gns3TopologyNode[]>('get_gns3_nodes').then(setGnsNodes).catch(() => {});
@@ -161,22 +138,24 @@ export default function App() {
     const unlisteners: (() => void)[] = [];
     
     listen<SystemMetrics>('system-metrics-update', (event) => setMetrics(event.payload)).then(u => unlisteners.push(u));
-    listen<TunnelStatus>('tunnel-status-update', (event) => setTunnel(event.payload)).then(u => unlisteners.push(u));
-    listen<DualValveState>('dual-valves-update', (event) => setValves(event.payload)).then(u => unlisteners.push(u));
     listen<string>('navigate-tab', (event) => setActiveTab(event.payload)).then(u => unlisteners.push(u));
+    listen<string>('connection-checks-error', (event) => {
+      setConnectionChecksError(event.payload);
+      setActiveTab('network');
+      setScionSubTab('valves');
+    }).then(u => unlisteners.push(u));
 
     // Polling fallback
     const timer = setInterval(() => {
       invoke<SystemMetrics>('get_system_metrics').then(setMetrics).catch(() => {});
-      invoke<TunnelStatus>('get_tunnel_status').then(setTunnel).catch(() => {});
-      invoke<DualValveState>('get_valves').then(setValves).catch(() => {});
+      void refreshTunnel();
     }, 2500);
 
     return () => {
       clearInterval(timer);
       unlisteners.forEach(u => u());
     };
-  }, []);
+  }, [refreshTunnel]);
 
   const handleQuickClean = async () => {
     setCleanStatus('Clearing caches...');
@@ -191,62 +170,15 @@ export default function App() {
     setTimeout(() => setCleanStatus(null), 4000);
   };
 
-  const handleToggleTunnel = async () => {
-    const nextState = !tunnel.is_running;
-    setTunnelActionMsg(nextState ? 'Starting WSL Tunnel...' : 'Stopping WSL Tunnel...');
+  const openConnectionChecks = async () => {
+    setIsOpeningChecks(true);
+    setConnectionChecksError(null);
     try {
-      const res = await invoke<TunnelStatus>('toggle_tunnel', { enable: nextState });
-      setTunnel(res);
-      setTunnelActionMsg(nextState ? 'WSL tunnel started' : 'WSL tunnel stopped');
-    } catch (e: any) {
-      setTunnelActionMsg(`Tunnel toggle error: ${e}`);
-    }
-    setTimeout(() => setTunnelActionMsg(null), 4000);
-  };
-
-  const handleToggleValve = async (target: 'mio' | 'wd') => {
-    const current = target === 'mio' ? valves.valve_mio : valves.valve_wd;
-    try {
-      const res = await invoke<DualValveState>('set_valve', { valve: target, enable: !current });
-      setValves(res);
-      const freshTunnel = await invoke<TunnelStatus>('get_tunnel_status');
-      setTunnel(freshTunnel);
-    } catch (e: any) {
-      console.error('Failed to toggle proxy routing:', e);
-    }
-  };
-
-  const handleLlmQuery = async () => {
-    if (!llmApiKey.trim()) {
-      setLlmResponse('Error: API key required.');
-      return;
-    }
-    
-    setLlmLoading(true);
-    setLlmResponse(null);
-    try {
-      const res = await invoke<any>('query_llm', {
-        req: {
-          provider: llmProvider,
-          model: llmModel,
-          prompt: llmPrompt,
-          api_key: llmApiKey.trim() || null
-        }
-      });
-      // The Rust backend returns a struct, the text is typically in a `response` field, or we just stringify.
-      if (typeof res === 'string') {
-          setLlmResponse(res);
-      } else if (res && res.response) {
-          setLlmResponse(res.response);
-      } else if (res && res.content) {
-          setLlmResponse(res.content);
-      } else {
-          setLlmResponse(JSON.stringify(res, null, 2));
-      }
-    } catch (err: any) {
-      setLlmResponse(`Error: ${err}`);
+      await invoke<void>('open_connection_checks');
+    } catch (error) {
+      setConnectionChecksError(`Could not open connection checks: ${String(error)}`);
     } finally {
-      setLlmLoading(false);
+      setIsOpeningChecks(false);
     }
   };
 
@@ -277,14 +209,14 @@ export default function App() {
             <div className="nav-icon bg-blue"><Wifi size={15} color="white" /></div>
             <span style={{ flex: 1, textAlign: 'left' }}>Connections</span>
             <span style={{
-              background: (valves.valve_mio && valves.valve_wd) ? '#10b981' : (valves.valve_mio || valves.valve_wd ? '#007aff' : '#8e8e93'),
+              background: '#8e8e93',
               color: 'white',
               fontSize: '9px',
               padding: '1px 6px',
               borderRadius: '4px',
               fontWeight: 700
             }}>
-              {valves.valve_mio && valves.valve_wd ? 'ACTIVE' : (valves.valve_mio || valves.valve_wd ? 'DEGRADED' : 'OFF')}
+              UNVERIFIED
             </span>
           </button>
 
@@ -294,22 +226,6 @@ export default function App() {
           >
             <div className="nav-icon bg-green"><Activity size={15} color="white" /></div>
             <span>System</span>
-          </button>
-
-          <button 
-            className={`nav-item ${activeTab === 'llm' ? 'active' : ''}`}
-            onClick={() => setActiveTab('llm')}
-          >
-            <div className="nav-icon bg-purple"><Bot size={15} color="white" /></div>
-            <span>AI Models</span>
-          </button>
-
-          <button 
-            className={`nav-item ${activeTab === 'firewall' ? 'active' : ''}`}
-            onClick={() => setActiveTab('firewall')}
-          >
-            <div className="nav-icon bg-orange"><ShieldAlert size={15} color="white" /></div>
-            <span>Security</span>
           </button>
 
           <button 
@@ -332,8 +248,6 @@ export default function App() {
           <div className="header-title drag-region">
             {activeTab === 'system' && 'System Telemetry'}
             {activeTab === 'network' && 'Network Connections & Routing'}
-            {activeTab === 'llm' && 'AI Model Gateway'}
-            {activeTab === 'firewall' && 'Security Policies'}
             {activeTab === 'about' && 'About Omnia-Vault'}
           </div>
         </header>
@@ -348,10 +262,10 @@ export default function App() {
                   <div className={`status-dot status-green`} />
                   <div>
                     <div style={{ fontSize: '13px', fontWeight: 600 }}>
-                      {metrics.os_name} &middot; Memory Used: {metrics.memory_percent.toFixed(0)}%
+                      {metrics.os_name} &middot; Memory used: {metrics.memory_percent.toFixed(0)}%
                     </div>
                     <div className="mole-spec-badge">
-                      {(metrics.memory_total_mb / 1024).toFixed(0)} GB &middot; {metrics.cpu_cores} Cores &middot; up {formatUptime(metrics.uptime_secs)}
+                      {(metrics.memory_total_mb / 1024).toFixed(0)} GB &middot; {metrics.cpu_cores} Processor cores &middot; up {formatUptime(metrics.uptime_secs)}
                     </div>
                   </div>
                 </div>
@@ -470,97 +384,97 @@ export default function App() {
                   className={`subtab-btn ${scionSubTab === 'valves' ? 'active' : ''}`}
                   onClick={() => setScionSubTab('valves')}
                 >
-                  Proxy Routing
+                  Connection details
                 </button>
                 <button 
                   className={`subtab-btn ${scionSubTab === 'daemons' ? 'active' : ''}`}
                   onClick={() => setScionSubTab('daemons')}
                 >
-                  SCION Daemons ({scionDaemons.length})
+                  Services
                 </button>
                 <button 
                   className={`subtab-btn ${scionSubTab === 'paths' ? 'active' : ''}`}
                   onClick={() => setScionSubTab('paths')}
                 >
-                  SCION Paths ({scionPaths.length})
+                  Routes
                 </button>
                 <button 
                   className={`subtab-btn ${scionSubTab === 'gns3' ? 'active' : ''}`}
                   onClick={() => setScionSubTab('gns3')}
                 >
-                  WSL Virtual Nodes ({gnsNodes.length})
+                  Test network
                 </button>
               </div>
 
               {scionSubTab === 'valves' && (
                 <>
-                  <div className="valve-grid" style={{ marginTop: '16px' }}>
-                    {/* Mio Proxy (macOS PAC) */}
-                    <div className={`valve-card ${valves.valve_mio ? 'active-cold' : 'closed'}`}>
-                      <div className="valve-header">
-                        <span className="valve-title">
-                          <span style={{ fontSize: '18px' }}>🌐</span> Mio Proxy (macOS)
-                        </span>
-                        <span className={`valve-badge ${valves.valve_mio ? 'valve-badge-cold' : 'valve-badge-off'}`}>
-                          {valves.valve_mio ? 'ON' : 'OFF'}
-                        </span>
+                  <div className="settings-list" style={{ marginTop: '16px' }}>
+                    <div className="settings-item">
+                      <div className="status-dot status-orange" />
+                      <div className="item-content">
+                        <div className="item-title">Connection not verified</div>
+                        <div className="item-subtitle" style={{ lineHeight: 1.5 }}>
+                          SCION use by Codex and Antigravity has not been verified here.
+                          A proxy flag or running helper cannot confirm their connection.
+                        </div>
                       </div>
-                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
-                        Routes macOS native browser traffic through SCION PAC configuration. Local socket.
+                    </div>
+                    <div className="settings-item">
+                      <div className="item-content">
+                        <div className="item-title">Check a new SCION connection</div>
+                        <div className="item-subtitle" style={{ lineHeight: 1.5 }}>
+                          Opens Connections in System Settings. Choose Check SCION there to see
+                          the VPN, local services, and a strict SCION connection test. A successful
+                          test does not prove that an existing model session uses SCION.
+                        </div>
                       </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text-tertiary)' }}>
-                        <span>Ping: {valves.valve_mio ? `${valves.mio_latency_ms} ms` : 'Offline'}</span>
-                      </div>
-                      <button 
-                        onClick={() => handleToggleValve('mio')}
-                        style={{
-                          marginTop: 'auto',
-                          background: valves.valve_mio ? '#1c3b47' : '#2c2c30',
-                          border: `1px solid ${valves.valve_mio ? 'rgba(0, 240, 255, 0.4)' : 'rgba(255, 255, 255, 0.1)'}`,
-                          color: valves.valve_mio ? '#00f0ff' : 'var(--text-primary)',
-                          borderRadius: '6px',
-                          padding: '7px 12px',
-                          fontSize: '12px',
-                          fontWeight: 600,
-                          cursor: 'pointer'
-                        }}
+                      <button
+                        onClick={() => void openConnectionChecks()}
+                        disabled={isOpeningChecks}
+                        style={{ background: '#007aff', border: 'none', color: 'white', borderRadius: '6px', padding: '8px 12px', fontSize: '12px', cursor: isOpeningChecks ? 'wait' : 'pointer', marginLeft: '12px', flexShrink: 0 }}
                       >
-                        {valves.valve_mio ? 'Disable Mio Proxy' : 'Enable Mio Proxy'}
+                        {isOpeningChecks ? 'Opening…' : 'Check connection'}
                       </button>
                     </div>
-
-                    {/* WD Proxy (Windows WSL) */}
-                    <div className={`valve-card ${valves.valve_wd ? 'active-hot' : 'closed'}`}>
+                  </div>
+                  {connectionChecksError && (
+                    <div role="alert" style={{ color: 'var(--orange)', fontSize: '12px', marginTop: '10px' }}>
+                      {connectionChecksError}
+                    </div>
+                  )}
+                  <div className="valve-grid" style={{ marginTop: '16px' }}>
+                    <div className="valve-card closed">
                       <div className="valve-header">
                         <span className="valve-title">
-                          <span style={{ fontSize: '18px' }}>🌐</span> WD Proxy (WSL)
+                          <span style={{ fontSize: '18px' }}>🌐</span> Automatic proxy
                         </span>
-                        <span className={`valve-badge ${valves.valve_wd ? 'valve-badge-hot' : 'valve-badge-off'}`}>
-                          {valves.valve_wd ? 'ON' : 'OFF'}
+                        <span className="valve-badge valve-badge-off">
+                          Not checked
                         </span>
                       </div>
                       <div style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
-                        Routes traffic through Windows 11 WSL2 SCION network backbone.
+                        This page does not read macOS proxy settings or verify which apps use the proxy.
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text-tertiary)' }}>
-                        <span>Ping: {valves.valve_wd ? `${valves.wd_latency_ms} ms` : 'Offline'}</span>
+                        <span>Latency: Not measured</span>
                       </div>
-                      <button 
-                        onClick={() => handleToggleValve('wd')}
-                        style={{
-                          marginTop: 'auto',
-                          background: valves.valve_wd ? '#472d1c' : '#2c2c30',
-                          border: `1px solid ${valves.valve_wd ? 'rgba(255, 149, 0, 0.4)' : 'rgba(255, 255, 255, 0.1)'}`,
-                          color: valves.valve_wd ? '#ff9500' : 'var(--text-primary)',
-                          borderRadius: '6px',
-                          padding: '7px 12px',
-                          fontSize: '12px',
-                          fontWeight: 600,
-                          cursor: 'pointer'
-                        }}
-                      >
-                        {valves.valve_wd ? 'Disable WD Proxy' : 'Enable WD Proxy'}
-                      </button>
+                    </div>
+
+                    <div className="valve-card closed">
+                      <div className="valve-header">
+                        <span className="valve-title">
+                          <Server size={18} /> GNS3 management helper
+                        </span>
+                        <span className="valve-badge valve-badge-off">
+                          {tunnel ? (tunnel.is_running ? 'Process running' : 'No process reported') : 'Unavailable'}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                        Reports the legacy helper process only. This does not identify the route used by SCION or your apps.
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text-tertiary)' }}>
+                        <span>Local port 3080: {tunnel ? (tunnel.port_responding ? 'TCP connection accepted' : 'No TCP response') : 'Not checked'}</span>
+                      </div>
                     </div>
                   </div>
 
@@ -570,22 +484,25 @@ export default function App() {
                         <Server size={18} color="white" />
                       </div>
                       <div className="item-content">
-                        <div className="item-title">WSL Tunnel Process: {tunnel.label}</div>
-                        <div className="item-subtitle">
-                          <div className={`status-dot ${tunnel.port_responding ? 'status-green' : 'status-orange'}`}></div>
-                          Target: {tunnel.target_host} &middot; PID {tunnel.pid || 'Inactive'}
+                        <div className="item-title">GNS3 helper observations</div>
+                        <div className="item-subtitle" style={{ lineHeight: 1.5 }}>
+                          {tunnel ? `Service: ${tunnel.label} · PID: ${tunnel.pid ?? 'Not reported'}` : 'No current helper observation'}
+                          <br />
+                          {tunnelCheckedAt ? `Last successful read: ${tunnelCheckedAt.toLocaleTimeString()}` : 'No successful read yet'}
                         </div>
                       </div>
                       <button 
-                        onClick={handleToggleTunnel}
-                        style={{ background: '#38383e', border: 'none', color: 'white', borderRadius: '6px', padding: '5px 12px', fontSize: '12px', cursor: 'pointer', marginRight: '8px' }}
+                        onClick={() => void refreshTunnel()}
+                        disabled={isRefreshingTunnel}
+                        title="Read helper process status and check the local management port. Does not change routing."
+                        style={{ background: '#38383e', border: 'none', color: 'white', borderRadius: '6px', padding: '5px 12px', fontSize: '12px', cursor: isRefreshingTunnel ? 'wait' : 'pointer', marginRight: '8px' }}
                       >
-                        {tunnel.is_running ? 'Stop' : 'Start'}
+                        {isRefreshingTunnel ? 'Reading…' : 'Refresh helper status'}
                       </button>
                     </div>
                   </div>
-                  {tunnelActionMsg && (
-                    <div style={{ 
+                  {tunnelError && (
+                    <div role="status" style={{
                       padding: '10px 14px', 
                       background: 'rgba(0, 122, 255, 0.12)', 
                       border: '1px solid rgba(0, 122, 255, 0.35)', 
@@ -594,7 +511,7 @@ export default function App() {
                       fontSize: '12px', 
                       color: '#007aff' 
                     }}>
-                      {tunnelActionMsg}
+                      {tunnelError}
                     </div>
                   )}
                 </>
@@ -628,7 +545,7 @@ export default function App() {
                             </td>
                           </tr>
                         )) : (
-                          <tr><td colSpan={6} style={{textAlign: 'center', padding: '16px', color: 'var(--text-secondary)'}}>No SCION daemons detected</td></tr>
+                          <tr><td colSpan={6} style={{textAlign: 'center', padding: '16px', color: 'var(--text-secondary)'}}>Service data unavailable</td></tr>
                         )}
                     </tbody>
                   </table>
@@ -663,7 +580,7 @@ export default function App() {
                           </td>
                         </tr>
                       )) : (
-                        <tr><td colSpan={6} style={{textAlign: 'center', padding: '16px', color: 'var(--text-secondary)'}}>No SCION paths detected</td></tr>
+                        <tr><td colSpan={6} style={{textAlign: 'center', padding: '16px', color: 'var(--text-secondary)'}}>Route data unavailable</td></tr>
                       )}
                     </tbody>
                   </table>
@@ -698,7 +615,7 @@ export default function App() {
                           </td>
                         </tr>
                       )) : (
-                        <tr><td colSpan={6} style={{textAlign: 'center', padding: '16px', color: 'var(--text-secondary)'}}>No Virtual Nodes detected</td></tr>
+                        <tr><td colSpan={6} style={{textAlign: 'center', padding: '16px', color: 'var(--text-secondary)'}}>GNS3 node data unavailable</td></tr>
                       )}
                     </tbody>
                   </table>
@@ -707,120 +624,28 @@ export default function App() {
             </div>
           )}
 
-          {/* TAB 3: EXTERNAL LLMS */}
-          {activeTab === 'llm' && (
-            <div className="ndi-container">
-              <div className="ndi-card">
-                <div className="ndi-row">
-                  <span className="ndi-label">Provider Gateway:</span>
-                  <select 
-                    className="ndi-select" 
-                    value={llmProvider} 
-                    onChange={(e) => {
-                      const p = e.target.value;
-                      setLlmProvider(p);
-                      if (p === 'openrouter') setLlmModel('deepseek/deepseek-r1');
-                      else if (p === 'codex') setLlmModel('gpt-4o');
-                      else if (p === 'trae') setLlmModel('trae-agent-v1');
-                    }}
-                  >
-                    <option value="openrouter">OpenRouter (Multi-Model Consensus)</option>
-                    <option value="codex">OpenAI Codex</option>
-                    <option value="trae">Trae Agent</option>
-                  </select>
-                </div>
-
-                <div className="ndi-divider" />
-
-                <div className="ndi-row">
-                  <span className="ndi-label">Model:</span>
-                  <select 
-                    className="ndi-select" 
-                    value={llmModel} 
-                    onChange={(e) => setLlmModel(e.target.value)}
-                  >
-                    {llmProvider === 'openrouter' && (
-                      <>
-                        <option value="deepseek/deepseek-r1">deepseek/deepseek-r1</option>
-                        <option value="anthropic/claude-3.5-sonnet">anthropic/claude-3.5-sonnet</option>
-                        <option value="openai/gpt-4o">openai/gpt-4o</option>
-                      </>
-                    )}
-                    {llmProvider === 'codex' && (
-                      <>
-                        <option value="gpt-4o">gpt-4o</option>
-                        <option value="gpt-4o-mini">gpt-4o-mini</option>
-                      </>
-                    )}
-                    {llmProvider === 'trae' && (
-                      <option value="trae-agent-v1">trae-agent-v1 (Local Daemon)</option>
-                    )}
-                  </select>
-                </div>
-
-                <div className="ndi-divider" />
-
-                <div className="ndi-row">
-                  <span className="ndi-label">API Key:</span>
-                  <input 
-                    type="password"
-                    className="ndi-select"
-                    style={{ cursor: 'text' }}
-                    placeholder="Enter API Key"
-                    value={llmApiKey}
-                    onChange={(e) => setLlmApiKey(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              <div className="ndi-card">
-                <div style={{ fontSize: '13px', fontWeight: 500, color: '#e5e5e7', marginBottom: '8px' }}>
-                  Prompt
-                </div>
-                <textarea 
-                  className="ndi-select" 
-                  style={{ width: '100%', height: '70px', resize: 'vertical', cursor: 'text', fontFamily: 'monospace', fontSize: '12px' }}
-                  value={llmPrompt}
-                  onChange={(e) => setLlmPrompt(e.target.value)}
-                />
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '10px' }}>
-                  <button 
-                    className="btn-restart-ndi" 
-                    disabled={llmLoading}
-                    onClick={handleLlmQuery}
-                    style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-                  >
-                    <Send size={14} />
-                    {llmLoading ? 'Querying...' : `Query ${llmProvider}`}
-                  </button>
-                </div>
-              </div>
-
-              {llmResponse && (
-                <div className="ndi-card" style={{ background: '#1c1c1f', border: '1px solid rgba(0, 122, 255, 0.35)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                    <span style={{ fontSize: '12px', fontWeight: 600, color: '#007aff' }}>
-                      Response
-                    </span>
-                  </div>
-                  <pre style={{ margin: 0, whiteSpace: 'pre-wrap', fontSize: '12px', color: '#e5e5e7', fontFamily: 'monospace' }}>
-                    {llmResponse}
-                  </pre>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* TAB 4: SECURITY */}
-          {activeTab === 'firewall' && (
+          {/* TAB 3: ABOUT */}
+          {activeTab === 'about' && (
             <div className="settings-list">
-              <div className="settings-item" onClick={handleQuickClean} style={{ cursor: 'pointer' }}>
+              <div className="settings-item">
+                <div className="item-icon-container bg-blue">
+                  <Server size={18} color="white" />
+                </div>
+                <div className="item-content">
+                  <div className="item-title">Omnia-Vault Desktop</div>
+                  <div className="item-subtitle">
+                    v0.2.2
+                  </div>
+                </div>
+              </div>
+
+              <div className="settings-item" onClick={handleQuickClean} style={{ cursor: 'pointer', marginTop: '16px' }}>
                 <div className="item-icon-container bg-orange">
                   <HardDrive size={18} color="white" />
                 </div>
                 <div className="item-content">
-                  <div className="item-title" style={{ color: 'var(--orange)' }}>Clear Application Caches</div>
-                  <div className="item-subtitle">Purge local temporary logs and caches</div>
+                  <div className="item-title" style={{ color: 'var(--orange)' }}>Review app files</div>
+                  <div className="item-subtitle">Clean local application caches</div>
                 </div>
                 <Power size={16} color="var(--orange)" />
               </div>
@@ -838,23 +663,6 @@ export default function App() {
                   {cleanStatus}
                 </div>
               )}
-            </div>
-          )}
-
-          {/* TAB 5: ABOUT */}
-          {activeTab === 'about' && (
-            <div className="settings-list">
-              <div className="settings-item">
-                <div className="item-icon-container bg-blue">
-                  <Server size={18} color="white" />
-                </div>
-                <div className="item-content">
-                  <div className="item-title">Omnia-Vault Desktop</div>
-                  <div className="item-subtitle">
-                    v0.2.1
-                  </div>
-                </div>
-              </div>
             </div>
           )}
         </div>

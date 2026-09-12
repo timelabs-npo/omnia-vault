@@ -8,6 +8,18 @@ use log::{info, warn};
 
 static MIO_VALVE_ACTIVE: AtomicBool = AtomicBool::new(true);
 
+pub fn open_connection_checks() -> Result<(), String> {
+    let output = Command::new("/usr/bin/open")
+        .arg("x-apple.systempreferences:com.timelabs.BlueshoesPane")
+        .output()
+        .map_err(|e| format!("Could not open Connections in System Settings: {}", e))?;
+    if output.status.success() {
+        Ok(())
+    } else {
+        Err("Could not open Connections in System Settings. Open System Settings and select Connections.".into())
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TunnelStatus {
     pub is_running: bool,
@@ -20,14 +32,8 @@ pub struct TunnelStatus {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct DualValveState {
-    pub valve_mio: bool,            // Cold Valve (macOS Native Node)
-    pub valve_wd: bool,             // Hot Valve (Windows 11 WSL2 / GNS3 Hypervisor)
-    pub flow_mode: String,          // "Blended Multi-Path (Warm Flow)", "Cold Stream (mio only)", "Hot Stream (wd only)", "Isolated"
-    pub flow_temperature: String,   // "Warm (Blended)", "Cold (mio)", "Hot (wd)", "Off"
-    pub total_flow_kb: u64,
-    pub active_path_count: usize,
-    pub mio_latency_ms: f32,
-    pub wd_latency_ms: f32,
+    pub valve_mio: bool,
+    pub valve_wd: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -120,42 +126,9 @@ pub fn get_dual_valve_state() -> DualValveState {
     let valve_wd = tunnel.is_running;
     let valve_mio = MIO_VALVE_ACTIVE.load(Ordering::SeqCst);
 
-    let (flow_mode, flow_temperature, active_path_count, total_flow_kb) = match (valve_mio, valve_wd) {
-        (true, true) => (
-            "Blended Multi-Path (Warm Flow)".to_string(),
-            "Warm (Blended)".to_string(),
-            4,
-            6240,
-        ),
-        (true, false) => (
-            "Native Host Only (Cold Stream)".to_string(),
-            "Cold (mio)".to_string(),
-            2,
-            2840,
-        ),
-        (false, true) => (
-            "Hypervisor GNS3 Only (Hot Stream)".to_string(),
-            "Hot (wd)".to_string(),
-            2,
-            3400,
-        ),
-        (false, false) => (
-            "Isolated (Both Valves Closed)".to_string(),
-            "Off".to_string(),
-            0,
-            0,
-        ),
-    };
-
     DualValveState {
         valve_mio,
         valve_wd,
-        flow_mode,
-        flow_temperature,
-        total_flow_kb,
-        active_path_count,
-        mio_latency_ms: if valve_mio { 0.4 } else { 0.0 },
-        wd_latency_ms: if valve_wd { 1.2 } else { 0.0 },
     }
 }
 
@@ -167,21 +140,32 @@ pub fn set_valve_state(valve: &str, enable: bool) -> Result<DualValveState, Stri
         "mio" => {
             MIO_VALVE_ACTIVE.store(enable, Ordering::SeqCst);
             if enable {
-                let _ = Command::new("networksetup")
+                let out1 = Command::new("networksetup")
                     .args(&["-setautoproxyurl", "Wi-Fi", "http://127.0.0.1:8888/skip.pac"])
                     .output();
-                let _ = Command::new("networksetup")
+                if out1.is_err() || !out1.as_ref().unwrap().status.success() {
+                    MIO_VALVE_ACTIVE.store(false, Ordering::SeqCst);
+                    return Err("Failed to set automatic proxy URL".into());
+                }
+                let out2 = Command::new("networksetup")
                     .args(&["-setautoproxystate", "Wi-Fi", "on"])
                     .output();
-                info!("Mio valve enabled: macOS system proxy routed to SCION mesh.");
+                if out2.is_err() || !out2.as_ref().unwrap().status.success() {
+                    MIO_VALVE_ACTIVE.store(false, Ordering::SeqCst);
+                    return Err("Failed to enable automatic proxy state".into());
+                }
+                info!("Automatic proxy enabled.");
             } else {
-                let _ = Command::new("networksetup")
+                let out = Command::new("networksetup")
                     .args(&["-setautoproxystate", "Wi-Fi", "off"])
                     .output();
-                info!("Mio valve disabled: macOS system proxy restored to native.");
+                if out.is_err() || !out.as_ref().unwrap().status.success() {
+                    return Err("Failed to disable automatic proxy".into());
+                }
+                info!("Automatic proxy disabled.");
             }
         }
-        _ => return Err(format!("Unknown valve: {}", valve)),
+        _ => return Err(format!("Unknown connection: {}", valve)),
     }
     Ok(get_dual_valve_state())
 }
@@ -248,149 +232,15 @@ pub fn restart_gns3_tunnel() -> Result<TunnelStatus, String> {
 }
 
 pub fn get_scion_managed_daemons() -> Vec<ScionDaemonEntity> {
-    vec![
-        ScionDaemonEntity {
-            id: "cs-110-1".into(),
-            name: "Control Service (CS)".into(),
-            as_id: "1-ff00:0:110".into(),
-            daemon_type: "Control Service (CS)".into(),
-            status: "running".into(),
-            port: 31002,
-            packet_count: 14820,
-        },
-        ScionDaemonEntity {
-            id: "br-110-1".into(),
-            name: "Border Router 1 (to AS-111)".into(),
-            as_id: "1-ff00:0:110".into(),
-            daemon_type: "Border Router (BR)".into(),
-            status: "running".into(),
-            port: 30042,
-            packet_count: 89402,
-        },
-        ScionDaemonEntity {
-            id: "br-110-2".into(),
-            name: "Border Router 2 (to AS-112)".into(),
-            as_id: "1-ff00:0:110".into(),
-            daemon_type: "Border Router (BR)".into(),
-            status: "running".into(),
-            port: 30043,
-            packet_count: 42100,
-        },
-        ScionDaemonEntity {
-            id: "godispatcher-110".into(),
-            name: "Packet Dispatcher (godispatcher)".into(),
-            as_id: "1-ff00:0:110".into(),
-            daemon_type: "Dispatcher".into(),
-            status: "running".into(),
-            port: 30041,
-            packet_count: 124900,
-        },
-        ScionDaemonEntity {
-            id: "sciond-110".into(),
-            name: "SCION Path Engine (sciond)".into(),
-            as_id: "1-ff00:0:110".into(),
-            daemon_type: "Daemon (sciond)".into(),
-            status: "running".into(),
-            port: 30255,
-            packet_count: 38200,
-        },
-        ScionDaemonEntity {
-            id: "sig-110".into(),
-            name: "IP Gateway (SIG Tunnel)".into(),
-            as_id: "1-ff00:0:110".into(),
-            daemon_type: "IP Gateway (SIG)".into(),
-            status: "running".into(),
-            port: 30056,
-            packet_count: 67100,
-        },
-        ScionDaemonEntity {
-            id: "cs-111-1".into(),
-            name: "Access AS Control Service".into(),
-            as_id: "1-ff00:0:111".into(),
-            daemon_type: "Control Service (CS)".into(),
-            status: "running".into(),
-            port: 31002,
-            packet_count: 9820,
-        },
-        ScionDaemonEntity {
-            id: "br-111-1".into(),
-            name: "Access AS Border Router".into(),
-            as_id: "1-ff00:0:111".into(),
-            daemon_type: "Border Router (BR)".into(),
-            status: "running".into(),
-            port: 30042,
-            packet_count: 51200,
-        },
-    ]
+    vec![]
 }
 
 pub fn get_scion_paths() -> Vec<ScionPathEntity> {
-    vec![
-        ScionPathEntity {
-            destination_as: "1-ff00:0:111".into(),
-            hops: vec!["1-ff00:0:110 [Core]".into(), "1-ff00:0:111 [Access]".into()],
-            mtu: 1472,
-            latency_ms: 4.2,
-            expiration_secs: 21540,
-            is_active: true,
-            policy: "Best (Lowest Latency)".into(),
-        },
-        ScionPathEntity {
-            destination_as: "1-ff00:0:111".into(),
-            hops: vec!["1-ff00:0:110 [Core]".into(), "1-ff00:0:112 [Transit]".into(), "1-ff00:0:111 [Access]".into()],
-            mtu: 1472,
-            latency_ms: 11.8,
-            expiration_secs: 18400,
-            is_active: false,
-            policy: "Backup Path".into(),
-        },
-        ScionPathEntity {
-            destination_as: "1-ff00:0:112".into(),
-            hops: vec!["1-ff00:0:110 [Core]".into(), "1-ff00:0:112 [Transit]".into()],
-            mtu: 1472,
-            latency_ms: 6.5,
-            expiration_secs: 25200,
-            is_active: true,
-            policy: "High Bandwidth".into(),
-        },
-    ]
+    vec![]
 }
 
 pub fn get_gns3_topology_nodes() -> Vec<Gns3TopologyNode> {
-    vec![
-        Gns3TopologyNode {
-            node_id: "as110-core-cs".into(),
-            name: "AS110-Core-CS (Beacon & Path Reg)".into(),
-            node_type: "docker".into(),
-            status: "started".into(),
-            console_port: 5001,
-            as_mapping: "1-ff00:0:110".into(),
-        },
-        Gns3TopologyNode {
-            node_id: "as110-br1".into(),
-            name: "AS110-BR1 (Interface 1 to AS111)".into(),
-            node_type: "docker".into(),
-            status: "started".into(),
-            console_port: 5002,
-            as_mapping: "1-ff00:0:110".into(),
-        },
-        Gns3TopologyNode {
-            node_id: "as111-access-cs".into(),
-            name: "AS111-Access-CS (Leaf Autonomous System)".into(),
-            node_type: "docker".into(),
-            status: "started".into(),
-            console_port: 5003,
-            as_mapping: "1-ff00:0:111".into(),
-        },
-        Gns3TopologyNode {
-            node_id: "as112-transit-br".into(),
-            name: "AS112-Transit-BR (Transit Gateway Router)".into(),
-            node_type: "docker".into(),
-            status: "started".into(),
-            console_port: 5004,
-            as_mapping: "1-ff00:0:112".into(),
-        },
-    ]
+    vec![]
 }
 
 pub fn get_ndi_settings() -> NdiSettings {

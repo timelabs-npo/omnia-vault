@@ -1,0 +1,95 @@
+{
+  "purpose": "Source identity only; not LIT receipts or runtime acceptance.",
+  "files": [
+    {
+      "source": "recovered-contract",
+      "path": "01_contracts/lit/LIT_RECEIPT_V1.md",
+      "sha256": "20eef5b711117ca699739f9bd0a3c4e7af79a668261551e35c555de991cfd9ce",
+      "bytes": 12054
+    },
+    {
+      "source": "recovered-contract",
+      "path": "01_contracts/lit/LIT_INIT_V1.md",
+      "sha256": "00efc42a2d395b2482bd9070de11db8b2b2d6d15c7cb5e52eab43cb4c5ff8974",
+      "bytes": 17093
+    },
+    {
+      "source": "recovered-contract",
+      "path": "01_contracts/lit/LIT_FREEZE_CANDIDATE_V1_R2.md",
+      "sha256": "64f7394cb540500e5ccf387dbb0bf43c16a5237bfd3487999f09aed29ff0c500",
+      "bytes": 9403
+    },
+    {
+      "source": "recovered-contract",
+      "path": "01_contracts/lit/LIT_FULL_PACKAGE_V1_R2_AUDIT.md",
+      "sha256": "43933b9a9044b0dd5e556974562f9b727e0a6c3eb200364d568744b066c409b2",
+      "bytes": 5497
+    },
+    {
+      "source": "recovered-contract",
+      "path": "01_contracts/lit/OMNIA-LIT-001_HANDOFF.md",
+      "sha256": "7b188724d0d6d0a8ead893e7f71ac29c8a714997fc40b4419ac9dda943e97694",
+      "bytes": 27792
+    },
+    {
+      "source": "recovered-contract",
+      "path": "docs/TECH_SPEC_LIT_001.md",
+      "sha256": "139d6a16ec6e4af2028c7f90958df8a0c51ea2596fab57eefe4beceaf4e8fb18",
+      "bytes": 24906
+    },
+    {
+      "source": "tauri-prototype",
+      "path": "src-tauri/src/lit.rs",
+      "sha256": "501f9b135ccbaf42170d322d258a13765fdace4bf5c3ab780b2a444a1bb41336",
+      "bytes": 19046
+    },
+    {
+      "source": "supervisor-snapshot",
+      "path": "src/bin/omnia_lit_001.rs",
+      "sha256": "08fb5bd6948fa6941c890dc2bd59ce3075c053b3098115ea01010a23c8482951",
+      "bytes": 10556
+    },
+    {
+      "source": "supervisor-snapshot",
+      "path": "src/intact_transition/encoding.rs",
+      "sha256": "4e9dec3486f286710efa8ca79bbe02d1de08aa037aa36e0a617798269e9f03bd",
+      "bytes": 7277
+    },
+    {
+      "source": "supervisor-snapshot",
+      "path": "src/intact_transition/mod.rs",
+      "sha256": "6020e9ab5999eb5859b663a8a49d1ca41feed6cae9f05f2f82927239018d62da",
+      "bytes": 1175
+    },
+    {
+      "source": "supervisor-snapshot",
+      "path": "src/intact_transition/store.rs",
+      "sha256": "db980392d0842722cc54d4ae33336ec77b366bda6f0f8f026a9afd3c09636714",
+      "bytes": 60314
+    },
+    {
+      "source": "supervisor-snapshot",
+      "path": "src/intact_transition/types.rs",
+      "sha256": "1b5ac8d043be44184faf3784f59e08650aa966ba5b87d0f821ab49b9e7fb4505",
+      "bytes": 6562
+    },
+    {
+      "source": "supervisor-snapshot",
+      "path": "src/intact_transition/wire.rs",
+      "sha256": "c1ddfa7e6bad8a2dfbec8aefdf854e8df0711f6880ec80c85084cc3f1d275a79",
+      "bytes": 20954
+    },
+    {
+      "source": "supervisor-snapshot",
+      "path": "src/lib.rs",
+      "sha256": "c982e93777c1f7d57fef07d498f228215a45461d8eae9255819c69bd56d1ada2",
+      "bytes": 27
+    },
+    {
+      "source": "supervisor-snapshot",
+      "path": "src/main.rs",
+      "sha256": "65b75b806e6927594990b788330fa4d9ff1e2c56447fac089202f5104f5b017a",
+      "bytes": 10505
+    }
+  ]
+}

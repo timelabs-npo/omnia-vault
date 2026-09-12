@@ -1,0 +1,32 @@
+{
+  "phase": "technical_refinement",
+  "product_implementation": "unlocked",
+  "current_macos_prototypes": "discarded_as_baseline",
+  "technical_contract": "proposed_review_pending",
+  "lit": {
+    "reference": "Recovered LIT V1 review package R2 candidate",
+    "reference_status": "NOT_FROZEN",
+    "admitted_engine": null,
+    "state": "blocked_at_contract_conformance",
+    "store_commands_executed": 0,
+    "accepted_publications": 0,
+    "accepted_chain": false,
+    "source_comparison": "completed",
+    "runtime_conformance": "not_executed",
+    "independent_oracle_acceptance": "not_established"
+  },
+  "network": {
+    "new_baseline_gates": "not_executed",
+    "vpn_or_scion_services_changed_by_reset": false,
+    "live_sessions_used_for_fault_injection": false
+  },
+  "scope": {
+    "all_requested_storage_providers_retained": true,
+    "network_workstream_is_not_full_beta": true
+  },
+  "review": {
+    "lit_source_and_gate_review": "completed; gate-cycle and evidence-reference wording corrected",
+    "user_scope_review": "completed; full-beta scope and external-failure wording corrected"
+  },
+  "artifact_hashes_are_lit_receipts": false
+}
